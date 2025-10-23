@@ -1,0 +1,518 @@
+<template>
+  <el-container style="min-height: 100vh; width: 100%;">
+    
+    <el-header class="app-header">
+      个性化培养周选课工具
+    </el-header>
+
+    <el-main v-loading="loading" element-loading-text="正在加载课程数据..." class="app-main">
+      <el-tabs v-model="activeTab">
+        
+        <el-tab-pane label="课程筛选与方案配置" name="config">
+          <el-row :gutter="20">
+            <el-col :span="24" :md="8">
+              <el-card header="1. 基本筛选条件">
+                <el-form :model="filters" label-position="top">
+
+                  <el-row :gutter="20">
+                    <el-col :span="24" :md="12">
+                      <el-form-item label="最低报录比 (已选/容量)">
+                        <el-input-number v-model="filters.minRatio" :min="0" :max="20" :step="0.1" controls-position="right" style="width: 100%;" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="24" :md="12">
+                      <el-form-item label="最高报录比 (已选/容量)">
+                        <el-input-number v-model="filters.maxRatio" :min="0" :max="20" :step="0.1" controls-position="right" style="width: 100%;" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+
+                  <el-row :gutter="20">
+                    <el-col :span="24" :md="12">
+                      <el-form-item label="最低教学班容量">
+                        <el-input-number v-model="filters.minCapacity" :min="0" :step="10" controls-position="right" style="width: 100%;" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="24" :md="12">
+                      <el-form-item label="校区选择">
+                        <el-checkbox-group v-model="filters.selectedCampuses" class="responsive-checkbox-group">
+                          <el-checkbox label="旗山校区" />
+                          <el-checkbox label="仓山校区" />
+                        </el-checkbox-group>
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  
+                  <el-form-item label="[排除] 特定地点 (英文逗号分隔)">
+                    <el-input v-model="filters.excludeOutdoorPrefix" placeholder="个性周-室外,东区,健美操馆" />
+                  </el-form-item>
+                </el-form>
+              </el-card>
+
+              <el-card header="2. 选课方案模板" style="margin-top: 20px;">
+                <div v-for="(template, index) in planTemplates" :key="index" class="plan-template">
+                  <strong>模板 {{ index + 1 }}</strong>
+                  <el-form :model="template" label-width="80px" size="small">
+                    <el-form-item label="开课周">
+                      <el-input-number v-model="template.week" :min="1" :max="20" controls-position="right" />
+                    </el-form-item>
+                    <el-form-item label="开课星期">
+                      <el-checkbox-group v-model="template.days">
+                        <el-checkbox v-for="day in 7" :key="day" :label="day">{{ dayMap[day] }}</el-checkbox>
+                      </el-checkbox-group>
+                    </el-form-item>
+                    <el-form-item label="课程规格">
+                       <el-select v-model="template.periodType">
+                        <el-option label="仅标准2节课 (1-2, 3-4...)" :value="1" />
+                        <el-option label="任意2节课 (1-2, 2-3...)" :value="0" />
+                        <el-option label="任意2节课 (不含1-2)" :value="2" />
+                      </el-select>
+                    </el-form-item>
+                     <el-form-item label="课程门数">
+                      <el-input-number v-model="template.maxCourses" :min="1" :max="12" controls-position="right" />
+                    </el-form-item>
+                  </el-form>
+                  <el-button type="danger" size="small" @click="removeTemplate(index)" circle :icon="Delete" />
+                </div>
+                <el-button type="primary" @click="addTemplate" :icon="Plus" round>添加方案模板</el-button>
+                <el-button type="success" @click="generatePlans" :icon="Promotion" round style="margin-top: 10px; width: 100%;">
+                  生成选课方案
+                </el-button>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="24" :md="16">
+              <el-card :header="`课程总览 (${filteredCourses.length}/${processedCourses.length})${jsonUpdateTime ? ` → 更新于 ${jsonUpdateTime}` : ''}`">
+                <el-table :data="filteredCourses" stripe class="main-course-table" style="width: 100%">
+                  <el-table-column prop="kcmc" label="课程名称" min-width="180" />
+                  <el-table-column prop="jsxx" label="教师信息" width="120" />
+                  <el-table-column prop="sksj" label="上课时间" width="200" />
+                  <el-table-column prop="jxdd" label="上课地点" width="150" />
+                  <el-table-column label="容量/已选" width="100">
+                    <template #default="{ row }">
+                      {{ row.jxbrl }} / {{ row.yxrs }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="parsed.ratio" label="报录比" width="80">
+                    <template #default="{ row }">
+                      {{ (row.parsed.ratio || 0).toFixed(2) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="parsed.week" label="周" width="60" />
+                  <el-table-column prop="parsed.day" label="天" width="60">
+                     <template #default="{ row }">
+                      {{ dayMap[row.parsed.day] }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="节" width="80">
+                     <template #default="{ row }">
+                      {{ row.parsed.startPeriod }}-{{ row.parsed.endPeriod }}
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-card>
+            </el-col>
+          </el-row>
+        </el-tab-pane>
+
+        <el-tab-pane label="生成的选课方案" name="results">
+          <div v-if="generatedPlans.length === 0" style="text-align: center; color: #999; padding: 40px;">
+            请先在“课程筛选与方案配置”标签页中配置并点击“生成选课方案”
+          </div>
+          <el-collapse v-model="activePlanNames">
+            <el-collapse-item 
+              v-for="(plan, index) in generatedPlans" 
+              :key="index"
+              :name="index"
+              :title="`方案 ${index + 1} (模板: 周${plan.template.week}, 天[${plan.template.days.join(',')}], 规格${plan.template.periodType}) - 共 ${plan.courses.length} 门`">
+              
+              <el-table :data="plan.courses" stripe border class="plan-result-table">
+                <el-table-column type="index" width="50" />
+                <el-table-column prop="kcmc" label="课程名称" min-width="180" />
+                <el-table-column prop="jsxx" label="教师信息" width="120" />
+                <el-table-column prop="sksj" label="上课时间" width="180" />
+                <el-table-column prop="jxdd" label="上课地点" width="150" />
+                <el-table-column label="容量/已选" width="100">
+                  <template #default="{ row }">
+                    {{ row.jxbrl }} / {{ row.yxrs }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="报录比" width="100">
+                  <template #default="{ row }">
+                    {{ (row.parsed.ratio || 0).toFixed(2) }}
+                  </template>
+                </el-table-column>
+              </el-table>
+
+            </el-collapse-item>
+          </el-collapse>
+        </el-tab-pane>
+
+      </el-tabs>
+    </el-main>
+  </el-container>
+</template>
+
+<script setup>
+import { ref, reactive, onMounted, computed } from 'vue';
+import axios from 'axios';
+import { ElMessage } from 'element-plus';
+import { Delete, Plus, Promotion } from '@element-plus/icons-vue';
+
+// --- 状态定义 ---
+
+const loading = ref(true);
+const activeTab = ref('config');
+const allCourses = ref([]); // 原始课程数据
+const jsonUpdateTime = ref(''); // 存储更新时间
+const processedCourses = ref([]); // 经过预处理的课程数据
+const generatedPlans = ref([]); // 生成的方案
+const activePlanNames = ref([0]); // 默认展开第一个方案
+
+// 【修改点2】: 新增 maxRatio 默认值
+const filters = reactive({
+  minRatio: 0.3,
+  maxRatio: 10, // 报录比上限
+  minCapacity: 90,
+  selectedCampuses: ['旗山校区'], // 默认全选
+  excludeOutdoorPrefix: '个性周-室外,东区,健美操馆',
+});
+
+// 星期映射
+const dayMap = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日' };
+const dayMapReverse = {
+  '星期一': 1, '星期二': 2, '星期三': 3, '星期四': 4, '星期五': 5, '星期六': 6, '星期日': 7
+};
+
+// 选课方案模板 (对应Python中的 sk_days)
+const planTemplates = ref([
+  // { week: 周数, periodType: 规格(0,1,2), days: [星期几], maxCourses: 数量 }
+  { week: 7, periodType: 1, days: [1, 2], maxCourses: 6 },
+  { week: 8, periodType: 1, days: [1, 2], maxCourses: 6 },
+]);
+
+// --- 辅助函数 (数据预处理) ---
+
+// 提取周数: {7周} -> 7
+const parseWeek = (sksj) => {
+  const match = sksj.match(/\{(\d+)周\}/);
+  return match ? parseInt(match[1], 10) : null;
+};
+
+// 提取天: 星期一 -> 1
+const parseDay = (sksj) => {
+  for (const [key, value] of Object.entries(dayMapReverse)) {
+    if (sksj.includes(key)) {
+      return value;
+    }
+  }
+  return null;
+};
+
+// 提取开始节: 第1-2节 -> 1
+const parseStartPeriod = (sksj) => {
+  const match = sksj.match(/第(\d+)-\d+节/);
+  return match ? parseInt(match[1], 10) : null;
+};
+
+// 提取结束节: 第1-2节 -> 2
+const parseEndPeriod = (sksj) => {
+  const match = sksj.match(/第\d+-(\d+)节/);
+  return match ? parseInt(match[1], 10) : null;
+};
+
+// 预处理所有课程
+const preprocessCourses = (courses) => {
+  return courses
+    .map(course => {
+      const jxbrl = parseInt(course.jxbrl, 10);
+      const yxrs = parseInt(course.yxrs, 10);
+      const week = parseWeek(course.sksj);
+      const day = parseDay(course.sksj);
+      const startPeriod = parseStartPeriod(course.sksj);
+      const endPeriod = parseEndPeriod(course.sksj);
+
+      // 只有所有时间信息都解析成功才认为是有效课程
+      if (week === null || day === null || startPeriod === null || endPeriod === null || isNaN(jxbrl) || isNaN(jxbrl)) {
+        return null;
+      }
+      
+      const ratio = (jxbrl > 0) ? (yxrs / jxbrl) : (yxrs > 0 ? 999 : 0); // 避免除以0
+
+      return {
+        ...course,
+        jxbrl, // 确保是数字
+        yxrs,  // 确保是数字
+        parsed: {
+          week,
+          day,
+          startPeriod,
+          endPeriod,
+          ratio,
+        }
+      };
+    })
+    .filter(course => course !== null); // 过滤掉解析失败的课程
+};
+
+// --- 计算属性 (动态筛选) ---
+
+// 1. 基本筛选 (应用 filters)
+const filteredCourses = computed(() => {
+  const cangshanPrefixes = ['文', '综', '音', '基地', '田'];
+  const excludeOutdoor = filters.excludeOutdoorPrefix.split(',').filter(Boolean);
+  
+  return processedCourses.value.filter(c => {
+    // 【修改点3】: 新增最高报录比过滤
+    if (c.parsed.ratio < filters.minRatio) return false;
+    if (c.parsed.ratio > filters.maxRatio) return false; // 过滤超过上限的
+    
+    if (c.jxbrl <= filters.minCapacity) return false;
+    
+    const location = c.jxdd || ''; // 确保地点不是null
+    const isCangshan = cangshanPrefixes.some(prefix => location.startsWith(prefix));
+    const isQishan = !isCangshan;
+
+    const showQishan = filters.selectedCampuses.includes('旗山校区');
+    const showCangshan = filters.selectedCampuses.includes('仓山校区');
+
+    // 如果是旗山课程，但用户不想看旗山，则过滤
+    if (isQishan && !showQishan) return false;
+    // 如果是仓山课程，但用户不想看仓山，则过滤
+    if (isCangshan && !showCangshan) return false;
+    
+    // 室外排除 (这个逻辑保留)
+    if (excludeOutdoor.some(prefix => location.startsWith(prefix))) return false;
+    
+    return true;
+  });
+});
+
+// --- 核心逻辑 (方案生成) ---
+
+// 2. 检查课程是否满足 "标准2节课"
+const isStandardPeriod = (start, end) => {
+  return (start === 1 && end === 2) ||
+         (start === 3 && end === 4) ||
+         (start === 5 && end === 6) ||
+         (start === 7 && end === 8) ||
+         (start === 9 && end === 10) ||
+         (start === 11 && end === 12);
+};
+
+// 3. 检查两门课是否冲突
+const checkConflict = (courseA, courseB) => {
+  // 课程名称相同
+  if (courseA.kcmc === courseB.kcmc) return true;
+  
+  const pA = courseA.parsed;
+  const pB = courseB.parsed;
+
+  // 周或天不同，不冲突
+  if (pA.week !== pB.week || pA.day !== pB.day) {
+    return false;
+  }
+  
+  // 时间不重叠: A在B前 或 A在B后
+  const noOverlap = (pA.endPeriod < pB.startPeriod) || (pA.startPeriod > pB.endPeriod);
+  
+  return !noOverlap; // 重叠则冲突
+};
+
+// 4. 生成方案的主函数
+const generatePlans = () => {
+  generatedPlans.value = [];
+  const baseCourses = filteredCourses.value; // 使用已筛选过的课程
+  
+  if (baseCourses.length === 0) {
+    ElMessage.warning('没有满足基本筛选条件的课程，无法生成方案。');
+    return;
+  }
+  
+  for (const template of planTemplates.value) {
+    // 步骤 4.1: 根据模板筛选课程
+    let templateFiltered = baseCourses.filter(c => {
+      // 匹配周
+      if (c.parsed.week !== template.week) return false;
+      // 匹配天
+      if (!template.days.includes(c.parsed.day)) return false;
+      
+      // 匹配课程规格
+      const duration = c.parsed.endPeriod - c.parsed.startPeriod;
+      if (template.periodType === 1) { // 仅标准2节课
+        return isStandardPeriod(c.parsed.startPeriod, c.parsed.endPeriod);
+      } else if (template.periodType === 0) { // 任意2节课
+        return duration <= 1; // 1-2, 2-3 都是 1
+      } else if (template.periodType === 2) { // 任意2节课 (不含1-2)
+        return duration <= 1 && c.parsed.startPeriod !== 1;
+      }
+      return false;
+    });
+    
+    // 步骤 4.2: 排序 (按报录比从低到高，优先选报的人少的)
+    templateFiltered.sort((a, b) => a.parsed.ratio - b.parsed.ratio);
+    
+    // 步骤 4.3: 贪心算法填充
+    const selectedCourses = [];
+    for (const course of templateFiltered) {
+      if (selectedCourses.length >= template.maxCourses) {
+        break; // 达到本方案最大课程数
+      }
+      
+      let hasConflict = false;
+      for (const selected of selectedCourses) {
+        if (checkConflict(course, selected)) {
+          hasConflict = true;
+          break;
+        }
+      }
+      
+      if (!hasConflict) {
+        selectedCourses.push(course);
+      }
+    }
+    
+    // 步骤 4.4: 排序并保存方案
+    selectedCourses.sort((a, b) => {
+      if (a.parsed.day !== b.parsed.day) return a.parsed.day - b.parsed.day;
+      return a.parsed.startPeriod - b.parsed.startPeriod;
+    });
+    
+    generatedPlans.value.push({
+      template: { ...template },
+      courses: selectedCourses,
+    });
+  }
+  
+  ElMessage.success(`成功生成 ${generatedPlans.value.length} 个选课方案！`);
+  activeTab.value = 'results'; // 切换到结果标签页
+  activePlanNames.value = generatedPlans.value.map((_, i) => i); // 默认展开所有
+};
+
+
+// --- 模板配置UI ---
+
+const addTemplate = () => {
+  planTemplates.value.push({
+    week: 7,
+    periodType: 0,
+    days: [1, 2, 3, 4, 5],
+    maxCourses: 8
+  });
+};
+
+const removeTemplate = (index) => {
+  planTemplates.value.splice(index, 1);
+};
+
+
+// --- 生命周期函数 ---
+
+onMounted(async () => {
+  document.title = '个性化培养周选课工具';
+
+  try {
+    loading.value = true;
+    const response = await axios.get('https://oss.nekoark.com/gxhpy_classes.json');
+    
+    if (response.data && response.data.courses) {
+      allCourses.value = response.data.courses;
+      jsonUpdateTime.value = response.data.update_time || '未知';
+      processedCourses.value = preprocessCourses(response.data.courses);
+    } else {
+      throw new Error("JSON数据格式不正确");
+    }
+  } catch (error) {
+    console.error(error);
+    ElMessage.error(`加载课程数据失败: ${error.message}. 请检查网络连接和CORS策略。`);
+  } finally {
+    loading.value = false;
+  }
+});
+
+</script>
+
+<style>
+/* 简单的样式 */
+.app-header {
+  background-color: #409EFF;
+  color: #fff;
+  text-align: center;
+  font-size: 20px;
+  line-height: 60px;
+  height: 60px; /* 显式设置默认高度 */
+}
+.el-card {
+  margin-bottom: 20px;
+}
+.plan-template {
+  border: 1px solid #ebeef5;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  position: relative;
+}
+.plan-template .el-button[type="danger"] {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+.el-checkbox-group .el-checkbox {
+  width: 80px; /* 调整复选框间距 */
+}
+
+/* 【修改点11】: 课程总览表格的默认高度 */
+.main-course-table {
+  height: 600px;
+}
+
+/* 【修改点12】: 添加媒体查询以实现移动端适配 */
+/* Element Plus 的 'md' 断点是 768px，所以我们用 767px 作为 max-width */
+@media (max-width: 767px) {
+  .app-header {
+    height: 50px;
+    line-height: 50px;
+    font-size: 18px;
+  }
+  
+  .app-main {
+    padding: 10px; /* 减少 main 区域的内边距 */
+  }
+
+  .main-course-table {
+    height: 450px; /* 移动端表格高度 */
+  }
+
+  /* 修复表格在移动端显示不全的问题，允许横向滚动 */
+  .main-course-table .el-table__body-wrapper,
+  .plan-result-table .el-table__body-wrapper {
+    overflow-x: auto;
+  }
+
+  /* 修复 el-tabs 在移动端的内边距 */
+  .el-tabs__content {
+    padding: 16px 5px;
+  }
+
+  /* 方案模板中的星期选择，改为垂直堆叠 */
+  .plan-template .el-checkbox-group {
+    display: flex;
+    flex-direction: column;
+  }
+  .plan-template .el-checkbox-group .el-checkbox {
+    width: auto; /* 取消固定宽度 */
+    margin-right: 0;
+  }
+  
+  /* 筛选条件中的校区选择，改为垂直堆叠 */
+  .responsive-checkbox-group {
+    display: flex;
+    flex-direction: column;
+  }
+  .responsive-checkbox-group .el-checkbox {
+     width: auto; /* 取消固定宽度 */
+     margin-right: 0;
+  }
+}
+
+</style>

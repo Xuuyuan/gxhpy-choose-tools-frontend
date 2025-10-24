@@ -82,7 +82,22 @@
             </el-col>
             
             <el-col :span="24" :md="16">
-              <el-card :header="`课程总览 (${filteredCourses.length}/${processedCourses.length})${jsonUpdateTime ? ` → 更新于 ${jsonUpdateTime}` : ''}`">
+              <el-card>
+                <template #header>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>
+                      课程总览 ({{ filteredCourses.length }}/{{ processedCourses.length }})
+                      <span v-if="jsonUpdateTime"> → 更新于 {{ jsonUpdateTime }}</span>
+                    </span>
+                    <el-button
+                      type="primary"
+                      :icon="Refresh"
+                      circle
+                      :loading="loading"
+                      @click="() => fetchCourses(true)"
+                    />
+                  </div>
+                </template>
                   <el-table 
                     :data="filteredCourses" 
                     stripe 
@@ -160,9 +175,9 @@
                 <el-table-column prop="jsxx" label="教师信息" width="120" />
                 <el-table-column prop="sksj" label="上课时间" width="180" />
                 <el-table-column prop="jxdd" label="上课地点" width="150" />
-                <el-table-column label="容量/已选" width="100">
+                <el-table-column label="已选/容量" width="100">
                   <template #default="{ row }">
-                    {{ row.jxbrl }} / {{ row.yxrs }}
+                    {{ row.yxrs }}/{{ row.jxbrl }}
                   </template>
                 </el-table-column>
                 <el-table-column label="报录比" width="100">
@@ -189,7 +204,7 @@
 import { ref, reactive, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
-import { Delete, Plus, Promotion } from '@element-plus/icons-vue';
+import { Delete, Plus, Promotion, Refresh } from '@element-plus/icons-vue';
 import { View, Hide } from '@element-plus/icons-vue'
 
 // --- 状态定义 ---
@@ -217,11 +232,21 @@ const dayMapReverse = {
   '星期一': 1, '星期二': 2, '星期三': 3, '星期四': 4, '星期五': 5, '星期六': 6, '星期日': 7
 };
 
-// 选课方案模板 (对应Python中的 sk_days)
+// 选课方案模板
 const planTemplates = ref([
   // { week: 周数, periodType: 规格(0,1,2), days: [星期几], maxCourses: 数量 }
+  
+  // 第一阶段（校级-第一轮）默认方案
   { week: 10, periodType: 1, days: [1], maxCourses: 4 },
   { week: 10, periodType: 2, days: [3], maxCourses: 4 },
+
+  // 第二阶段（校级-第二轮）默认方案
+  // { week: 10, periodType: 2, days: [4], maxCourses: 3 },
+  // { week: 10, periodType: 2, days: [5], maxCourses: 3 },
+
+  // 第三阶段（院级-第三轮）默认方案
+  // { week: 11, periodType: 2, days: [1], maxCourses: 2 },
+  // { week: 11, periodType: 2, days: [5], maxCourses: 2 },
 ]);
 
 // --- 辅助函数 (数据预处理) ---
@@ -439,27 +464,38 @@ const removeTemplate = (index) => {
 
 
 // --- 生命周期函数 ---
-
-onMounted(async () => {
-  document.title = '个性化培养周选课工具';
-
+const fetchCourses = async (isManualRefresh = false) => {
   try {
     loading.value = true;
-    const response = await axios.get('https://oss.nekoark.com/gxhpy_classes.json');
+    
+    // 添加时间戳参数以防止CDN缓存
+    const url = `https://oss.nekoark.com/gxhpy_classes.json?t=${new Date().getTime()}`;
+    const response = await axios.get(url);
     
     if (response.data && response.data.courses) {
       allCourses.value = response.data.courses;
       jsonUpdateTime.value = response.data.update_time || '未知';
       processedCourses.value = preprocessCourses(response.data.courses);
+      
+      if (isManualRefresh) {
+        ElMessage.success('课程数据已刷新！');
+      }
+      
     } else {
       throw new Error("JSON数据格式不正确");
     }
   } catch (error) {
     console.error(error);
-    ElMessage.error(`加载课程数据失败: ${error.message}. 请检查网络连接和CORS策略。`);
+    ElMessage.error(`加载课程数据失败: ${error.message}.`);
   } finally {
     loading.value = false;
   }
+};
+
+onMounted(async () => {
+  document.title = '个性化培养周选课工具';
+
+  await fetchCourses(false);
 });
 
 </script>

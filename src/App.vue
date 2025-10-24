@@ -83,33 +83,61 @@
             
             <el-col :span="24" :md="16">
               <el-card :header="`课程总览 (${filteredCourses.length}/${processedCourses.length})${jsonUpdateTime ? ` → 更新于 ${jsonUpdateTime}` : ''}`">
-                <el-table :data="filteredCourses" stripe class="main-course-table" style="width: 100%">
-                  <el-table-column prop="kcmc" label="课程名称" min-width="180" />
-                  <el-table-column prop="jsxx" label="教师信息" width="120" />
-                  <el-table-column prop="sksj" label="上课时间" width="200" />
-                  <el-table-column prop="jxdd" label="上课地点" width="150" />
-                  <el-table-column label="容量/已选" width="100">
-                    <template #default="{ row }">
-                      {{ row.jxbrl }} / {{ row.yxrs }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="parsed.ratio" label="报录比" width="80">
-                    <template #default="{ row }">
-                      {{ (row.parsed.ratio || 0).toFixed(2) }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="parsed.week" label="周" width="60" />
-                  <el-table-column prop="parsed.day" label="天" width="60">
-                     <template #default="{ row }">
-                      {{ dayMap[row.parsed.day] }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="节" width="80">
-                     <template #default="{ row }">
-                      {{ row.parsed.startPeriod }}-{{ row.parsed.endPeriod }}
-                    </template>
-                  </el-table-column>
-                </el-table>
+                  <el-table 
+                    :data="filteredCourses" 
+                    stripe 
+                    class="main-course-table" 
+                    style="width: 100%"
+                    :default-sort="{ prop: 'parsed.ratio', order: 'descending' }"
+                  >
+                      <el-table-column prop="kcmc" label="课程名称" min-width="180" />
+                      <el-table-column prop="jsxx" min-width="60">
+                        
+                        <template #header>
+                          <span style="margin-right: 5px;">教师</span>
+                          <el-icon 
+                            @click="showFullTeacherInfo = !showFullTeacherInfo" 
+                            style="cursor: pointer; vertical-align: middle;"
+                          >
+                            <Hide v-if="!showFullTeacherInfo" />
+                            <View v-else />
+                          </el-icon>
+                        </template>
+                        
+                        <template #default="{ row }">
+                          <span v-if="showFullTeacherInfo">
+                            {{ row.jsxx }}
+                          </span>
+                          <span v-else>
+                            {{ (row.jsxx && row.jsxx.split('/').length > 1) ? row.jsxx.split('/')[1] : row.jsxx }}
+                          </span>
+                        </template>
+                        
+                      </el-table-column>
+                      <el-table-column prop="sksj" label="上课时间" width="200" />
+                      <el-table-column prop="jxdd" label="上课地点" width="120" />
+                      <el-table-column label="已选/容量" width="110" sortable sort-by="yxrs">
+                          <template #default="{ row }">
+                              {{ row.yxrs }}/{{ row.jxbrl }}
+                          </template>
+                      </el-table-column>
+                      <el-table-column prop="parsed.ratio" label="报录比" width="90" sortable>
+                          <template #default="{ row }">
+                              {{ (row.parsed.ratio || 0).toFixed(2) }}
+                          </template>
+                      </el-table-column>
+                      <el-table-column prop="parsed.week" label="周" width="70" sortable/>
+                      <el-table-column prop="parsed.day" label="天" width="70" sortable>
+                          <template #default="{ row }">
+                              {{ dayMap[row.parsed.day] }}
+                          </template>
+                      </el-table-column>
+                      <el-table-column label="节" width="70" sortable sort-by="parsed.startPeriod">
+                          <template #default="{ row }">
+                              {{ row.parsed.startPeriod }}-{{ row.parsed.endPeriod }}
+                          </template>
+                      </el-table-column>
+                  </el-table>
               </el-card>
             </el-col>
           </el-row>
@@ -162,6 +190,7 @@ import { ref, reactive, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import { Delete, Plus, Promotion } from '@element-plus/icons-vue';
+import { View, Hide } from '@element-plus/icons-vue'
 
 // --- 状态定义 ---
 
@@ -172,7 +201,7 @@ const jsonUpdateTime = ref(''); // 存储更新时间
 const processedCourses = ref([]); // 经过预处理的课程数据
 const generatedPlans = ref([]); // 生成的方案
 const activePlanNames = ref([0]); // 默认展开第一个方案
-
+const showFullTeacherInfo = ref(false) // 教师信息显示
 // 【修改点2】: 新增 maxRatio 默认值
 const filters = reactive({
   minRatio: 0.3,
@@ -191,8 +220,8 @@ const dayMapReverse = {
 // 选课方案模板 (对应Python中的 sk_days)
 const planTemplates = ref([
   // { week: 周数, periodType: 规格(0,1,2), days: [星期几], maxCourses: 数量 }
-  { week: 10, periodType: 1, days: [1, 2], maxCourses: 6 },
-  { week: 10, periodType: 2, days: [4, 5], maxCourses: 6 },
+  { week: 10, periodType: 1, days: [1], maxCourses: 4 },
+  { week: 10, periodType: 2, days: [3], maxCourses: 4 },
 ]);
 
 // --- 辅助函数 (数据预处理) ---
@@ -263,11 +292,10 @@ const preprocessCourses = (courses) => {
 
 // 1. 基本筛选 (应用 filters)
 const filteredCourses = computed(() => {
-  const cangshanPrefixes = ['文', '综', '音', '基地', '田'];
+  const cangshanPrefixes = ['文', '综', '基地', '田'];
   const excludeOutdoor = filters.excludeOutdoorPrefix.split(',').filter(Boolean);
   
   return processedCourses.value.filter(c => {
-    // 【修改点3】: 新增最高报录比过滤
     if (c.parsed.ratio < filters.minRatio) return false;
     if (c.parsed.ratio > filters.maxRatio) return false; // 过滤超过上限的
     

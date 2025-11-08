@@ -84,18 +84,40 @@
             <el-col :span="24" :md="16">
               <el-card>
                 <template #header>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                     <span>
                       课程总览 ({{ filteredCourses.length }}/{{ processedCourses.length }})
                       <span v-if="jsonUpdateTime"> → 更新于 {{ jsonUpdateTime }}</span>
                     </span>
-                    <el-button
-                      type="primary"
-                      :icon="Refresh"
-                      circle
-                      :loading="loading"
-                      @click="() => fetchCourses(true)"
-                    />
+                    
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <el-link type="warning" href="./get_classes.zip" :icon="Download" target="_blank">下载脚本</el-link>
+                      
+                      <input 
+                        ref="fileInput"
+                        type="file" 
+                        accept=".json" 
+                        style="display: none;" 
+                        @change="handleFileSelected"
+                      />
+                      
+                      <el-button 
+                        type="primary" 
+                        :icon="Upload" 
+                        plain 
+                        @click="triggerFileInput"
+                      >
+                        上传JSON
+                      </el-button>
+                      
+                      <el-button
+                        type="primary"
+                        :icon="Refresh"
+                        circle
+                        :loading="loading"
+                        @click="() => fetchCourses(true)"
+                      />
+                    </div>
                   </div>
                 </template>
                   <el-table 
@@ -106,7 +128,7 @@
                     :default-sort="{ prop: 'parsed.ratio', order: 'descending' }"
                   >
                       <el-table-column prop="kcmc" label="课程名称" min-width="180" />
-                      <el-table-column prop="jsxx" min-width="60">
+                      <el-table-column prop="jsxx" min-width="90">
                         
                         <template #header>
                           <span style="margin-right: 5px;">教师</span>
@@ -172,7 +194,7 @@
               <el-table :data="plan.courses" stripe border class="plan-result-table">
                 <el-table-column type="index" width="50" />
                 <el-table-column prop="kcmc" label="课程名称" min-width="180" />
-                <el-table-column prop="jsxx" label="教师信息" width="120" />
+                <el-table-column prop="jsxx" label="教师信息" width="150" />
                 <el-table-column prop="sksj" label="上课时间" width="180" />
                 <el-table-column prop="jxdd" label="上课地点" width="150" />
                 <el-table-column label="已选/容量" width="100">
@@ -201,10 +223,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+// 导入 watch 用于响应式筛选
+import { ref, reactive, onMounted, watch } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
-import { Delete, Plus, Promotion, Refresh } from '@element-plus/icons-vue';
+import { Delete, Plus, Promotion, Refresh, Upload, Download } from '@element-plus/icons-vue';
 import { View, Hide } from '@element-plus/icons-vue'
 
 // --- 状态定义 ---
@@ -217,7 +240,10 @@ const processedCourses = ref([]); // 经过预处理的课程数据
 const generatedPlans = ref([]); // 生成的方案
 const activePlanNames = ref([0]); // 默认展开第一个方案
 const showFullTeacherInfo = ref(false) // 教师信息显示
-// 【修改点2】: 新增 maxRatio 默认值
+
+// 【新增】: 创建一个 ref 来引用原生的 input
+const fileInput = ref(null);
+
 const filters = reactive({
   minRatio: 0.3,
   maxRatio: 10, // 报录比上限
@@ -225,6 +251,9 @@ const filters = reactive({
   selectedCampuses: ['旗山校区'], // 默认全选
   excludeOutdoorPrefix: '个性周-室外,东区,健美操馆',
 });
+
+// 【关键修改】: 将 filteredCourses 从 computed 改为 ref
+const filteredCourses = ref([]);
 
 // 星期映射
 const dayMap = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日' };
@@ -237,16 +266,16 @@ const planTemplates = ref([
   // { week: 周数, periodType: 规格(0,1,2), days: [星期几], maxCourses: 数量 }
   
   // 第一阶段（校级-第一轮）默认方案
-  { week: 10, periodType: 1, days: [1], maxCourses: 4 },
-  { week: 10, periodType: 2, days: [3], maxCourses: 4 },
+  // { week: 10, periodType: 1, days: [1], maxCourses: 4 },
+  // { week: 10, periodType: 2, days: [3], maxCourses: 4 },
 
   // 第二阶段（校级-第二轮）默认方案
-  // { week: 10, periodType: 2, days: [4], maxCourses: 3 },
-  // { week: 10, periodType: 2, days: [5], maxCourses: 3 },
+  // { week: 10, periodType: 2, days: [4], maxCourses: 2 },
+  // { week: 10, periodType: 2, days: [5], maxCourses: 2 },
 
   // 第三阶段（院级-第三轮）默认方案
-  // { week: 11, periodType: 2, days: [1], maxCourses: 2 },
-  // { week: 11, periodType: 2, days: [5], maxCourses: 2 },
+  { week: 11, periodType: 2, days: [1], maxCourses: 3 },
+  { week: 11, periodType: 2, days: [5], maxCourses: 3 },
 ]);
 
 // --- 辅助函数 (数据预处理) ---
@@ -313,14 +342,18 @@ const preprocessCourses = (courses) => {
     .filter(course => course !== null); // 过滤掉解析失败的课程
 };
 
-// --- 计算属性 (动态筛选) ---
-
-// 1. 基本筛选 (应用 filters)
-const filteredCourses = computed(() => {
-  const cangshanPrefixes = ['文', '综', '基地', '田'];
+// --- 【关键修改】: 新增一个手动应用筛选的函数 ---
+const applyFilters = () => {
+  if (!processedCourses.value || processedCourses.value.length === 0) {
+    filteredCourses.value = [];
+    return;
+  }
+  
+  const cangshanPrefixes = ['文', '综', '田'];
   const excludeOutdoor = filters.excludeOutdoorPrefix.split(',').filter(Boolean);
   
-  return processedCourses.value.filter(c => {
+  // 将原 computed 的逻辑搬到这里
+  filteredCourses.value = processedCourses.value.filter(c => {
     if (c.parsed.ratio < filters.minRatio) return false;
     if (c.parsed.ratio > filters.maxRatio) return false; // 过滤超过上限的
     
@@ -343,6 +376,13 @@ const filteredCourses = computed(() => {
     
     return true;
   });
+};
+
+// 【关键修改】: 监听筛选条件的变化，并手动调用 applyFilters
+watch(filters, () => {
+  applyFilters();
+}, { 
+  deep: true // 确保能监听到 reactive 对象内部的变化
 });
 
 // --- 核心逻辑 (方案生成) ---
@@ -379,7 +419,8 @@ const checkConflict = (courseA, courseB) => {
 // 4. 生成方案的主函数
 const generatePlans = () => {
   generatedPlans.value = [];
-  const baseCourses = filteredCourses.value; // 使用已筛选过的课程
+  // 【注意】: 确保这里使用的是已经手动筛选过的 filteredCourses.value
+  const baseCourses = filteredCourses.value; 
   
   if (baseCourses.length === 0) {
     ElMessage.warning('没有满足基本筛选条件的课程，无法生成方案。');
@@ -446,9 +487,70 @@ const generatePlans = () => {
   activePlanNames.value = generatedPlans.value.map((_, i) => i); // 默认展开所有
 };
 
+// --- 【修改】: 文件处理 ---
+
+// 【新增】: 触发原生 input 点击的函数
+const triggerFileInput = () => {
+  fileInput.value.click();
+};
+
+// 【修改】: 将 handleFileChange 的逻辑迁移到新函数，并改为接收原生事件
+const handleFileSelected = (event) => {
+  const file = event.target.files[0]; // 从原生事件获取文件
+  if (!file) {
+    return; // 用户点击了取消
+  }
+
+  if (!file.type.includes('json') && !file.name.endsWith('.json')) {
+    ElMessage.warning('请选择一个.json文件');
+    return;
+  }
+
+  loading.value = true; // 显示加载动画
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    setTimeout(() => {
+      try {
+        const content = e.target.result;
+        const data = JSON.parse(content);
+
+        if (data && data.courses) {
+          allCourses.value = data.courses;
+          jsonUpdateTime.value = '本地上传';
+          processedCourses.value = preprocessCourses(data.courses);
+          
+          applyFilters();
+          
+          ElMessage.success('本地JSON文件加载成功！');
+          
+          generatedPlans.value = [];
+          activeTab.value = 'config';
+
+        } else {
+          throw new Error("JSON数据格式不正确, 缺少 'courses' 键。");
+        }
+      } catch (error) {
+        console.error(error);
+        ElMessage.error(`文件解析失败: ${error.message}`);
+      } finally {
+        loading.value = false; // 结束加载
+      }
+    }, 0); 
+  };
+  
+  reader.onerror = () => {
+      ElMessage.error('读取文件失败。');
+      loading.value = false;
+  }
+
+  reader.readAsText(file, 'UTF-8');
+
+  event.target.value = null;
+};
+
 
 // --- 模板配置UI ---
-
 const addTemplate = () => {
   planTemplates.value.push({
     week: 7,
@@ -468,15 +570,17 @@ const fetchCourses = async (isManualRefresh = false) => {
   try {
     loading.value = true;
     
-    // 添加时间戳参数以防止CDN缓存
     const url = `https://oss.nekoark.com/gxhpy_classes.json?t=${new Date().getTime()}`;
     const response = await axios.get(url);
     
     if (response.data && response.data.courses) {
       allCourses.value = response.data.courses;
+      // 从网络获取时，正常显示更新时间
       jsonUpdateTime.value = response.data.update_time || '未知';
       processedCourses.value = preprocessCourses(response.data.courses);
       
+      applyFilters(); // 加载完数据后手动筛选
+
       if (isManualRefresh) {
         ElMessage.success('课程数据已刷新！');
       }
@@ -494,8 +598,7 @@ const fetchCourses = async (isManualRefresh = false) => {
 
 onMounted(async () => {
   document.title = '个性化培养周选课工具';
-
-  await fetchCourses(false);
+  await fetchCourses(false); // 页面加载时获取数据并应用筛选
 });
 
 </script>
@@ -529,13 +632,12 @@ onMounted(async () => {
   width: 80px; /* 调整复选框间距 */
 }
 
-/* 【修改点11】: 课程总览表格的默认高度 */
+/* 课程总览表格的默认高度 */
 .main-course-table {
   height: 600px;
 }
 
-/* 【修改点12】: 添加媒体查询以实现移动端适配 */
-/* Element Plus 的 'md' 断点是 768px，所以我们用 767px 作为 max-width */
+/* 添加媒体查询以实现移动端适配 */
 @media (max-width: 767px) {
   .app-header {
     height: 50px;
@@ -582,5 +684,4 @@ onMounted(async () => {
      margin-right: 0;
   }
 }
-
 </style>

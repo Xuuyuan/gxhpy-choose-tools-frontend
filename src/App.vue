@@ -192,8 +192,7 @@
 </template>
 
 <script setup>
-// 导入 watch 用于响应式筛选
-import { computed, h, ref, reactive, onMounted, watch } from 'vue';
+import { computed, h, onMounted, reactive, ref, shallowRef } from 'vue';
 import { ElIcon, ElMessage, TableV2SortOrder } from 'element-plus';
 import 'element-plus/es/components/icon/style/css';
 import 'element-plus/es/components/message/style/css';
@@ -204,10 +203,9 @@ import { View, Hide } from '@element-plus/icons-vue'
 
 const loading = ref(true);
 const activeTab = ref('config');
-const allCourses = ref([]); // 原始课程数据
 const jsonUpdateTime = ref(''); // 存储更新时间
-const processedCourses = ref([]); // 经过预处理的课程数据
-const generatedPlans = ref([]); // 生成的方案
+const processedCourses = shallowRef([]); // 经过预处理的课程数据
+const generatedPlans = shallowRef([]); // 生成的方案
 const activePlanNames = ref([0]); // 默认展开第一个方案
 const showFullTeacherInfo = ref(false) // 教师信息显示
 
@@ -222,8 +220,26 @@ const filters = reactive({
   excludeOutdoorPrefix: '个性周-室外,东区,健美操馆',
 });
 
-// 【关键修改】: 将 filteredCourses 从 computed 改为 ref
-const filteredCourses = ref([]);
+const cangshanPrefixes = ['文', '综', '田'];
+const filteredCourses = computed(() => {
+  const excludeOutdoor = filters.excludeOutdoorPrefix.split(',').filter(Boolean);
+  const showQishan = filters.selectedCampuses.includes('旗山校区');
+  const showCangshan = filters.selectedCampuses.includes('仓山校区');
+
+  return processedCourses.value.filter(course => {
+    if (course.parsed.ratio < filters.minRatio) return false;
+    if (course.parsed.ratio > filters.maxRatio) return false;
+    if (course.jxbrl <= filters.minCapacity) return false;
+
+    const location = course.jxdd || '';
+    const isCangshan = cangshanPrefixes.some(prefix => location.startsWith(prefix));
+    if (isCangshan && !showCangshan) return false;
+    if (!isCangshan && !showQishan) return false;
+    if (excludeOutdoor.some(prefix => location.startsWith(prefix))) return false;
+
+    return true;
+  });
+});
 
 // 课程总览排序状态；默认保持原表格按报录比降序的行为
 const courseSort = ref({
@@ -285,7 +301,7 @@ const courseTableColumns = [
       ],
     ),
     cellRenderer: ({ rowData }) => renderTextCell(
-      showFullTeacherInfo.value ? rowData.jsxx : getTeacherDisplayName(rowData.jsxx),
+      showFullTeacherInfo.value ? rowData.jsxx : rowData.display.teacherName,
       rowData.jsxx,
     ),
   },
@@ -309,7 +325,7 @@ const courseTableColumns = [
     title: '已选/容量',
     width: 110,
     sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(`${rowData.yxrs}/${rowData.jxbrl}`),
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.selectedCapacity),
   },
   {
     key: 'ratio',
@@ -317,7 +333,7 @@ const courseTableColumns = [
     title: '报录比',
     width: 90,
     sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell((rowData.parsed.ratio || 0).toFixed(2)),
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.ratio),
   },
   {
     key: 'week',
@@ -333,7 +349,7 @@ const courseTableColumns = [
     title: '天',
     width: 70,
     sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(dayMap[rowData.parsed.day]),
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.day),
   },
   {
     key: 'startPeriod',
@@ -341,9 +357,7 @@ const courseTableColumns = [
     title: '节',
     width: 70,
     sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(
-      `${rowData.parsed.startPeriod}-${rowData.parsed.endPeriod}`,
-    ),
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.period),
   },
 ];
 
@@ -445,6 +459,13 @@ const preprocessCourses = (courses) => {
         virtualRowKey: course.jxb_id || `${course.kcmc}-${course.sksj}-${index}`,
         jxbrl, // 确保是数字
         yxrs,  // 确保是数字
+        display: {
+          teacherName: getTeacherDisplayName(course.jsxx),
+          selectedCapacity: `${yxrs}/${jxbrl}`,
+          ratio: (ratio || 0).toFixed(2),
+          day: dayMap[day],
+          period: `${startPeriod}-${endPeriod}`,
+        },
         parsed: {
           week,
           day,
@@ -456,49 +477,6 @@ const preprocessCourses = (courses) => {
     })
     .filter(course => course !== null); // 过滤掉解析失败的课程
 };
-
-// --- 【关键修改】: 新增一个手动应用筛选的函数 ---
-const applyFilters = () => {
-  if (!processedCourses.value || processedCourses.value.length === 0) {
-    filteredCourses.value = [];
-    return;
-  }
-  
-  const cangshanPrefixes = ['文', '综', '田'];
-  const excludeOutdoor = filters.excludeOutdoorPrefix.split(',').filter(Boolean);
-  
-  // 将原 computed 的逻辑搬到这里
-  filteredCourses.value = processedCourses.value.filter(c => {
-    if (c.parsed.ratio < filters.minRatio) return false;
-    if (c.parsed.ratio > filters.maxRatio) return false; // 过滤超过上限的
-    
-    if (c.jxbrl <= filters.minCapacity) return false;
-    
-    const location = c.jxdd || ''; // 确保地点不是null
-    const isCangshan = cangshanPrefixes.some(prefix => location.startsWith(prefix));
-    const isQishan = !isCangshan;
-
-    const showQishan = filters.selectedCampuses.includes('旗山校区');
-    const showCangshan = filters.selectedCampuses.includes('仓山校区');
-
-    // 如果是旗山课程，但用户不想看旗山，则过滤
-    if (isQishan && !showQishan) return false;
-    // 如果是仓山课程，但用户不想看仓山，则过滤
-    if (isCangshan && !showCangshan) return false;
-    
-    // 室外排除 (这个逻辑保留)
-    if (excludeOutdoor.some(prefix => location.startsWith(prefix))) return false;
-    
-    return true;
-  });
-};
-
-// 【关键修改】: 监听筛选条件的变化，并手动调用 applyFilters
-watch(filters, () => {
-  applyFilters();
-}, { 
-  deep: true // 确保能监听到 reactive 对象内部的变化
-});
 
 // --- 核心逻辑 (方案生成) ---
 
@@ -534,7 +512,6 @@ const checkConflict = (courseA, courseB) => {
 // 4. 生成方案的主函数
 const generatePlans = () => {
   generatedPlans.value = [];
-  // 【注意】: 确保这里使用的是已经手动筛选过的 filteredCourses.value
   const baseCourses = filteredCourses.value; 
   
   if (baseCourses.length === 0) {
@@ -542,6 +519,7 @@ const generatePlans = () => {
     return;
   }
   
+  const plans = [];
   for (const template of planTemplates.value) {
     // 步骤 4.1: 根据模板筛选课程
     let templateFiltered = baseCourses.filter(c => {
@@ -591,15 +569,17 @@ const generatePlans = () => {
       return a.parsed.startPeriod - b.parsed.startPeriod;
     });
     
-    generatedPlans.value.push({
+    plans.push({
       template: { ...template },
       courses: selectedCourses,
     });
   }
+
+  generatedPlans.value = plans;
   
-  ElMessage.success(`成功生成 ${generatedPlans.value.length} 个选课方案！`);
+  ElMessage.success(`成功生成 ${plans.length} 个选课方案！`);
   activeTab.value = 'results'; // 切换到结果标签页
-  activePlanNames.value = generatedPlans.value.map((_, i) => i); // 默认展开所有
+  activePlanNames.value = plans.map((_, i) => i); // 默认展开所有
 };
 
 // --- 【修改】: 文件处理 ---
@@ -631,11 +611,8 @@ const handleFileSelected = (event) => {
         const data = JSON.parse(content);
 
         if (data && data.courses) {
-          allCourses.value = data.courses;
           jsonUpdateTime.value = '本地上传';
           processedCourses.value = preprocessCourses(data.courses);
-          
-          applyFilters();
           
           ElMessage.success('本地JSON文件加载成功！');
           
@@ -695,12 +672,9 @@ const fetchCourses = async (isManualRefresh = false) => {
     const data = await response.json();
     
     if (data && data.courses) {
-      allCourses.value = data.courses;
       // 从网络获取时，正常显示更新时间
       jsonUpdateTime.value = data.update_time || '未知';
       processedCourses.value = preprocessCourses(data.courses);
-      
-      applyFilters(); // 加载完数据后手动筛选
 
       if (isManualRefresh) {
         ElMessage.success('课程数据已刷新！');

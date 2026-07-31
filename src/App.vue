@@ -14,7 +14,7 @@
         
         <el-tab-pane label="课程筛选与方案配置" name="config">
           <el-row :gutter="24" class="workspace-grid">
-            <el-col :span="24" :md="8">
+            <el-col :span="24" :lg="7">
               <el-card header="1. 基本筛选条件" class="panel-card filter-card">
                 <el-form :model="filters" label-position="top">
 
@@ -160,7 +160,7 @@
               </el-card>
             </el-col>
             
-            <el-col :span="24" :md="16">
+            <el-col :span="24" :lg="17">
               <el-card class="panel-card course-overview-card">
                 <template #header>
                   <div class="course-toolbar">
@@ -383,7 +383,7 @@ const courseTableColumns = [
     key: 'kcmc',
     dataKey: 'kcmc',
     title: '课程名称',
-    width: 180,
+    width: 150,
     flexGrow: 1,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.kcmc),
   },
@@ -391,7 +391,7 @@ const courseTableColumns = [
     key: 'jsxx',
     dataKey: 'jsxx',
     title: '教师',
-    width: 110,
+    width: 88,
     headerCellRenderer: () => h(
       'div',
       { class: 'teacher-column-header' },
@@ -419,21 +419,21 @@ const courseTableColumns = [
     key: 'sksj',
     dataKey: 'sksj',
     title: '上课时间',
-    width: 200,
+    width: 145,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.sksj),
   },
   {
     key: 'jxdd',
     dataKey: 'jxdd',
     title: '上课地点',
-    width: 120,
+    width: 88,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.jxdd),
   },
   {
     key: 'yxrs',
     dataKey: 'yxrs',
     title: '已选/容量',
-    width: 110,
+    width: 86,
     sortable: true,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.display.selectedCapacity),
   },
@@ -441,7 +441,7 @@ const courseTableColumns = [
     key: 'ratio',
     dataKey: 'ratio',
     title: '报录比',
-    width: 90,
+    width: 68,
     sortable: true,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.display.ratio),
   },
@@ -449,7 +449,7 @@ const courseTableColumns = [
     key: 'week',
     dataKey: 'week',
     title: '周',
-    width: 70,
+    width: 48,
     sortable: true,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.parsed.week),
   },
@@ -457,7 +457,7 @@ const courseTableColumns = [
     key: 'day',
     dataKey: 'day',
     title: '天',
-    width: 70,
+    width: 48,
     sortable: true,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.display.day),
   },
@@ -465,7 +465,7 @@ const courseTableColumns = [
     key: 'startPeriod',
     dataKey: 'startPeriod',
     title: '节',
-    width: 70,
+    width: 55,
     sortable: true,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.display.period),
   },
@@ -797,7 +797,7 @@ body {
 
 .app-header-content {
   display: flex;
-  width: min(1440px, 100%);
+  width: min(1680px, 100%);
   height: 100%;
   margin: 0 auto;
   align-items: center;
@@ -830,9 +830,13 @@ body {
 }
 
 .app-main {
-  width: min(1488px, 100%);
+  width: min(1728px, 100%);
   margin: 0 auto;
   padding: 22px 24px 32px;
+}
+
+.workspace-grid > .el-col {
+  min-width: 0;
 }
 
 .app-tabs > .el-tabs__header {
@@ -967,8 +971,14 @@ body {
   padding: 0 20px 20px;
 }
 
+.course-overview-card {
+  width: 100%;
+  min-width: 0;
+}
+
 .course-toolbar {
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 14px;

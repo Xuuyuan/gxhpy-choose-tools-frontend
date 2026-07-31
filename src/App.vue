@@ -17,11 +17,31 @@
                   <el-row :gutter="20">
                     <el-col :span="24" :md="12">
                       <el-form-item label="最低报录比 (已选/容量)">
+                        <template #label>
+                          <el-tooltip
+                            content="报录比过低时，存在不开课的可能性"
+                            placement="top"
+                            :show-after="200"
+                            popper-class="filter-tooltip"
+                          >
+                            <span class="filter-label-with-tooltip" tabindex="0">最低报录比 (已选/容量)</span>
+                          </el-tooltip>
+                        </template>
                         <el-input-number v-model="filters.minRatio" :min="0" :max="20" :step="0.1" controls-position="right" style="width: 100%;" />
                       </el-form-item>
                     </el-col>
                     <el-col :span="24" :md="12">
                       <el-form-item label="最高报录比 (已选/容量)">
+                        <template #label>
+                          <el-tooltip
+                            content="在一轮选课时若报录比大于1，存在被筛除出课程的可能性"
+                            placement="top"
+                            :show-after="200"
+                            popper-class="filter-tooltip"
+                          >
+                            <span class="filter-label-with-tooltip" tabindex="0">最高报录比 (已选/容量)</span>
+                          </el-tooltip>
+                        </template>
                         <el-input-number v-model="filters.maxRatio" :min="0" :max="20" :step="0.1" controls-position="right" style="width: 100%;" />
                       </el-form-item>
                     </el-col>
@@ -30,6 +50,16 @@
                   <el-row :gutter="20">
                     <el-col :span="24" :md="12">
                       <el-form-item label="最低教学班容量">
+                        <template #label>
+                          <el-tooltip
+                            content="选择合适的教学班容量可以避免选到小班课"
+                            placement="top"
+                            :show-after="200"
+                            popper-class="filter-tooltip"
+                          >
+                            <span class="filter-label-with-tooltip" tabindex="0">最低教学班容量</span>
+                          </el-tooltip>
+                        </template>
                         <el-input-number v-model="filters.minCapacity" :min="0" :step="10" controls-position="right" style="width: 100%;" />
                       </el-form-item>
                     </el-col>
@@ -42,9 +72,37 @@
                       </el-form-item>
                     </el-col>
                   </el-row>
-                  
+
                   <el-form-item label="[排除] 特定地点 (英文逗号分隔)">
+                    <template #label>
+                      <el-tooltip
+                        content="排除特定地点可以避免选取到室外或特殊教学楼课程"
+                        placement="top"
+                        :show-after="200"
+                        popper-class="filter-tooltip"
+                      >
+                        <span class="filter-label-with-tooltip" tabindex="0">[排除] 特定地点 (英文逗号分隔)</span>
+                      </el-tooltip>
+                    </template>
                     <el-input v-model="filters.excludeOutdoorPrefix" placeholder="个性周-室外,东区,健美操馆" />
+                  </el-form-item>
+
+                  <el-form-item label="[排除] 特定课程名称 (英文逗号分隔)">
+                    <template #label>
+                      <el-tooltip
+                        content="排除特定课程名称为备选项，用于避免抓取的课程列表含面向特定学院的开课而导致无法正常选课问题"
+                        placement="top"
+                        :show-after="200"
+                        popper-class="filter-tooltip"
+                      >
+                        <span class="filter-label-with-tooltip" tabindex="0">[排除] 特定课程名称 (英文逗号分隔)</span>
+                      </el-tooltip>
+                    </template>
+                    <el-input
+                      v-model="filters.excludeCourseNames"
+                      placeholder="课程名称A,课程名称B"
+                      clearable
+                    />
                   </el-form-item>
                 </el-form>
               </el-card>
@@ -148,7 +206,7 @@
                                 <p class="course-table-empty-hint">
                                   {{ processedCourses.length === 0
                                     ? '请点击右上角刷新，或上传本地 JSON 文件'
-                                    : '请尝试调整报录比、容量、校区或地点条件' }}
+                                    : '请尝试调整报录比、容量、校区、地点或课程名称条件' }}
                                 </p>
                               </template>
                             </el-empty>
@@ -232,11 +290,18 @@ const filters = reactive({
   minCapacity: 90,
   selectedCampuses: ['旗山校区'], // 默认全选
   excludeOutdoorPrefix: '个性周-室外,东区,健美操馆',
+  excludeCourseNames: '',
 });
 
 const cangshanPrefixes = ['文', '综', '田'];
 const filteredCourses = computed(() => {
   const excludeOutdoor = filters.excludeOutdoorPrefix.split(',').filter(Boolean);
+  const excludedCourseNames = new Set(
+    filters.excludeCourseNames
+      .split(',')
+      .map(courseName => courseName.trim())
+      .filter(Boolean),
+  );
   const showQishan = filters.selectedCampuses.includes('旗山校区');
   const showCangshan = filters.selectedCampuses.includes('仓山校区');
 
@@ -250,6 +315,7 @@ const filteredCourses = computed(() => {
     if (isCangshan && !showCangshan) return false;
     if (!isCangshan && !showQishan) return false;
     if (excludeOutdoor.some(prefix => location.startsWith(prefix))) return false;
+    if (excludedCourseNames.has((course.kcmc || '').trim())) return false;
 
     return true;
   });
@@ -740,6 +806,15 @@ onMounted(async () => {
   position: absolute;
   top: 10px;
   right: 10px;
+}
+.filter-label-with-tooltip {
+  cursor: help;
+  text-decoration: underline dotted var(--el-text-color-placeholder);
+  text-underline-offset: 3px;
+}
+.filter-tooltip {
+  max-width: 340px;
+  line-height: 1.6;
 }
 .el-checkbox-group .el-checkbox {
   width: 80px; /* 调整复选框间距 */

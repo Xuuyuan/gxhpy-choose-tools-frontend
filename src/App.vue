@@ -211,6 +211,7 @@ const showFullTeacherInfo = ref(false) // 教师信息显示
 
 // 【新增】: 创建一个 ref 来引用原生的 input
 const fileInput = ref(null);
+const courseDataUrl = 'https://oss.nekoark.com/gxhpy_classes.json';
 
 const filters = reactive({
   minRatio: 0.3,
@@ -661,9 +662,13 @@ const removeTemplate = (index) => {
 const fetchCourses = async (isManualRefresh = false) => {
   try {
     loading.value = true;
-    
-    const url = `https://oss.nekoark.com/gxhpy_classes.json?t=${new Date().getTime()}`;
-    const response = await fetch(url);
+
+    const requestUrl = isManualRefresh
+      ? `${courseDataUrl}?t=${Date.now()}`
+      : courseDataUrl;
+    const response = await fetch(requestUrl, {
+      cache: isManualRefresh ? 'no-store' : 'default',
+    });
 
     if (!response.ok) {
       throw new Error(`请求失败 (${response.status})`);

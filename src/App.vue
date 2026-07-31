@@ -126,8 +126,11 @@
                         <el-option label="任意2节课 (不含1-2)" :value="2" />
                       </el-select>
                     </el-form-item>
-                     <el-form-item label="课程门数">
+                    <el-form-item label="课程门数">
                       <el-input-number v-model="template.maxCourses" :min="1" :max="12" controls-position="right" />
+                    </el-form-item>
+                    <el-form-item>
+                      <el-checkbox v-model="template.excludeLatePeriods">排除晚课（第9-12节）</el-checkbox>
                     </el-form-item>
                   </el-form>
                   <el-button type="danger" size="small" @click="removeTemplate(index)" circle :icon="Delete" />
@@ -229,7 +232,7 @@
               v-for="(plan, index) in generatedPlans" 
               :key="index"
               :name="index"
-              :title="`方案 ${index + 1} (模板: 周${plan.template.week}, 天[${plan.template.days.join(',')}], 规格${plan.template.periodType}) - 共 ${plan.courses.length} 门`">
+              :title="`方案 ${index + 1} (模板: 周${plan.template.week}, 天[${plan.template.days.join(',')}], 规格${plan.template.periodType}) - 共 ${plan.courses.length} 门，估算全选成功率 ${formatProbability(plan.metrics.jointProbability)}`">
               
               <el-table :data="plan.courses" stripe border class="plan-result-table">
                 <el-table-column type="index" width="50" />
@@ -269,6 +272,11 @@ import 'element-plus/es/components/icon/style/css';
 import 'element-plus/es/components/message/style/css';
 import { Delete, Plus, Promotion, Refresh, Upload, Download } from '@element-plus/icons-vue';
 import { View, Hide } from '@element-plus/icons-vue'
+import {
+  findOptimalCoursePlan,
+  matchesPeriodType,
+  overlapsLatePeriods,
+} from './coursePlanner.js';
 
 // --- 状态定义 ---
 
@@ -308,7 +316,7 @@ const filteredCourses = computed(() => {
   return processedCourses.value.filter(course => {
     if (course.parsed.ratio < filters.minRatio) return false;
     if (course.parsed.ratio > filters.maxRatio) return false;
-    if (course.jxbrl <= filters.minCapacity) return false;
+    if (course.jxbrl < filters.minCapacity) return false;
 
     const location = course.jxdd || '';
     const isCangshan = cangshanPrefixes.some(prefix => location.startsWith(prefix));
@@ -338,6 +346,8 @@ const getTeacherDisplayName = (teacherInfo) => {
   const parts = teacherInfo.split('/');
   return parts.length > 1 ? parts[1] : teacherInfo;
 };
+
+const formatProbability = (probability) => `${(probability * 100).toFixed(2)}%`;
 
 const renderTextCell = (text, title = text) => h(
   'span',
@@ -471,7 +481,7 @@ const courseTableRowClass = ({ rowIndex }) => (
 
 // 选课方案模板
 const planTemplates = ref([
-  // { week: 周数, periodType: 规格(0,1,2), days: [星期几], maxCourses: 数量 }
+  // { week: 周数, periodType: 规格(0,1,2), days: [星期几], excludeLatePeriods: 是否排除晚课, maxCourses: 数量 }
   
   // 第一阶段（校级-第一轮）默认方案
   // { week: 10, periodType: 1, days: [1], maxCourses: 4 },
@@ -482,8 +492,8 @@ const planTemplates = ref([
   // { week: 10, periodType: 2, days: [5], maxCourses: 2 },
 
   // 第三阶段（院级-第三轮）默认方案
-  { week: 11, periodType: 2, days: [1], maxCourses: 3 },
-  { week: 11, periodType: 2, days: [5], maxCourses: 3 },
+  { week: 11, periodType: 2, days: [1], excludeLatePeriods: false, maxCourses: 3 },
+  { week: 11, periodType: 2, days: [5], excludeLatePeriods: false, maxCourses: 3 },
 ]);
 
 // --- 辅助函数 (数据预处理) ---
@@ -528,7 +538,7 @@ const preprocessCourses = (courses) => {
       const endPeriod = parseEndPeriod(course.sksj);
 
       // 只有所有时间信息都解析成功才认为是有效课程
-      if (week === null || day === null || startPeriod === null || endPeriod === null || isNaN(jxbrl) || isNaN(jxbrl)) {
+      if (week === null || day === null || startPeriod === null || endPeriod === null || isNaN(jxbrl) || isNaN(yxrs)) {
         return null;
       }
       
@@ -560,36 +570,7 @@ const preprocessCourses = (courses) => {
 
 // --- 核心逻辑 (方案生成) ---
 
-// 2. 检查课程是否满足 "标准2节课"
-const isStandardPeriod = (start, end) => {
-  return (start === 1 && end === 2) ||
-         (start === 3 && end === 4) ||
-         (start === 5 && end === 6) ||
-         (start === 7 && end === 8) ||
-         (start === 9 && end === 10) ||
-         (start === 11 && end === 12);
-};
-
-// 3. 检查两门课是否冲突
-const checkConflict = (courseA, courseB) => {
-  // 课程名称相同
-  if (courseA.kcmc === courseB.kcmc) return true;
-  
-  const pA = courseA.parsed;
-  const pB = courseB.parsed;
-
-  // 周或天不同，不冲突
-  if (pA.week !== pB.week || pA.day !== pB.day) {
-    return false;
-  }
-  
-  // 时间不重叠: A在B前 或 A在B后
-  const noOverlap = (pA.endPeriod < pB.startPeriod) || (pA.startPeriod > pB.endPeriod);
-  
-  return !noOverlap; // 重叠则冲突
-};
-
-// 4. 生成方案的主函数
+// 生成方案的主函数
 const generatePlans = () => {
   generatedPlans.value = [];
   const baseCourses = filteredCourses.value; 
@@ -607,41 +588,15 @@ const generatePlans = () => {
       if (c.parsed.week !== template.week) return false;
       // 匹配天
       if (!template.days.includes(c.parsed.day)) return false;
+      // 按模板排除与第9-12节重叠的晚课
+      if (template.excludeLatePeriods && overlapsLatePeriods(c)) return false;
       
-      // 匹配课程规格
-      const duration = c.parsed.endPeriod - c.parsed.startPeriod;
-      if (template.periodType === 1) { // 仅标准2节课
-        return isStandardPeriod(c.parsed.startPeriod, c.parsed.endPeriod);
-      } else if (template.periodType === 0) { // 任意2节课
-        return duration <= 1; // 1-2, 2-3 都是 1
-      } else if (template.periodType === 2) { // 任意2节课 (不含1-2)
-        return duration <= 1 && c.parsed.startPeriod !== 1;
-      }
-      return false;
+      return matchesPeriodType(c, template.periodType);
     });
-    
-    // 步骤 4.2: 排序 (按报录比从低到高，优先选报的人少的)
-    templateFiltered.sort((a, b) => a.parsed.ratio - b.parsed.ratio);
-    
-    // 步骤 4.3: 贪心算法填充
-    const selectedCourses = [];
-    for (const course of templateFiltered) {
-      if (selectedCourses.length >= template.maxCourses) {
-        break; // 达到本方案最大课程数
-      }
-      
-      let hasConflict = false;
-      for (const selected of selectedCourses) {
-        if (checkConflict(course, selected)) {
-          hasConflict = true;
-          break;
-        }
-      }
-      
-      if (!hasConflict) {
-        selectedCourses.push(course);
-      }
-    }
+
+    // 步骤 4.2: 精确搜索。先最大化课程门数，再最大化预计联合成功概率。
+    const optimalPlan = findOptimalCoursePlan(templateFiltered, template.maxCourses);
+    const selectedCourses = optimalPlan.courses;
     
     // 步骤 4.4: 排序并保存方案
     selectedCourses.sort((a, b) => {
@@ -652,6 +607,7 @@ const generatePlans = () => {
     plans.push({
       template: { ...template },
       courses: selectedCourses,
+      metrics: optimalPlan.metrics,
     });
   }
 
@@ -728,6 +684,7 @@ const addTemplate = () => {
     week: 7,
     periodType: 0,
     days: [1, 2, 3, 4, 5],
+    excludeLatePeriods: false,
     maxCourses: 8
   });
 };

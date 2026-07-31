@@ -120,61 +120,30 @@
                     </div>
                   </div>
                 </template>
-                  <el-table 
-                    :data="filteredCourses" 
-                    stripe 
-                    class="main-course-table" 
-                    style="width: 100%"
-                    :default-sort="{ prop: 'parsed.ratio', order: 'descending' }"
-                  >
-                      <el-table-column prop="kcmc" label="课程名称" min-width="180" />
-                      <el-table-column prop="jsxx" min-width="90">
-                        
-                        <template #header>
-                          <span style="margin-right: 5px;">教师</span>
-                          <el-icon 
-                            @click="showFullTeacherInfo = !showFullTeacherInfo" 
-                            style="cursor: pointer; vertical-align: middle;"
-                          >
-                            <Hide v-if="!showFullTeacherInfo" />
-                            <View v-else />
-                          </el-icon>
-                        </template>
-                        
-                        <template #default="{ row }">
-                          <span v-if="showFullTeacherInfo">
-                            {{ row.jsxx }}
-                          </span>
-                          <span v-else>
-                            {{ (row.jsxx && row.jsxx.split('/').length > 1) ? row.jsxx.split('/')[1] : row.jsxx }}
-                          </span>
-                        </template>
-                        
-                      </el-table-column>
-                      <el-table-column prop="sksj" label="上课时间" width="200" />
-                      <el-table-column prop="jxdd" label="上课地点" width="120" />
-                      <el-table-column label="已选/容量" width="110" sortable sort-by="yxrs">
-                          <template #default="{ row }">
-                              {{ row.yxrs }}/{{ row.jxbrl }}
+                  <div class="main-course-table">
+                    <el-auto-resizer>
+                      <template #default="{ height, width }">
+                        <el-table-v2
+                          :columns="courseTableColumns"
+                          :data="sortedFilteredCourses"
+                          :width="width"
+                          :height="height"
+                          :row-height="50"
+                          :header-height="50"
+                          :sort-by="courseSort"
+                          :row-class="courseTableRowClass"
+                          row-key="virtualRowKey"
+                          fixed
+                          scrollbar-always-on
+                          @column-sort="handleCourseSort"
+                        >
+                          <template #empty>
+                            <div class="course-table-empty">暂无数据</div>
                           </template>
-                      </el-table-column>
-                      <el-table-column prop="parsed.ratio" label="报录比" width="90" sortable>
-                          <template #default="{ row }">
-                              {{ (row.parsed.ratio || 0).toFixed(2) }}
-                          </template>
-                      </el-table-column>
-                      <el-table-column prop="parsed.week" label="周" width="70" sortable/>
-                      <el-table-column prop="parsed.day" label="天" width="70" sortable>
-                          <template #default="{ row }">
-                              {{ dayMap[row.parsed.day] }}
-                          </template>
-                      </el-table-column>
-                      <el-table-column label="节" width="70" sortable sort-by="parsed.startPeriod">
-                          <template #default="{ row }">
-                              {{ row.parsed.startPeriod }}-{{ row.parsed.endPeriod }}
-                          </template>
-                      </el-table-column>
-                  </el-table>
+                        </el-table-v2>
+                      </template>
+                    </el-auto-resizer>
+                  </div>
               </el-card>
             </el-col>
           </el-row>
@@ -224,9 +193,9 @@
 
 <script setup>
 // 导入 watch 用于响应式筛选
-import { ref, reactive, onMounted, watch } from 'vue';
+import { computed, h, ref, reactive, onMounted, watch } from 'vue';
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import { ElIcon, ElMessage, TableV2SortOrder } from 'element-plus';
 import { Delete, Plus, Promotion, Refresh, Upload, Download } from '@element-plus/icons-vue';
 import { View, Hide } from '@element-plus/icons-vue'
 
@@ -255,11 +224,155 @@ const filters = reactive({
 // 【关键修改】: 将 filteredCourses 从 computed 改为 ref
 const filteredCourses = ref([]);
 
+// 课程总览排序状态；默认保持原表格按报录比降序的行为
+const courseSort = ref({
+  key: 'ratio',
+  order: TableV2SortOrder.DESC,
+});
+
 // 星期映射
 const dayMap = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日' };
 const dayMapReverse = {
   '星期一': 1, '星期二': 2, '星期三': 3, '星期四': 4, '星期五': 5, '星期六': 6, '星期日': 7
 };
+
+const getTeacherDisplayName = (teacherInfo) => {
+  if (!teacherInfo) return '';
+  const parts = teacherInfo.split('/');
+  return parts.length > 1 ? parts[1] : teacherInfo;
+};
+
+const renderTextCell = (text, title = text) => h(
+  'span',
+  {
+    class: 'course-table-cell-text',
+    title: title == null ? '' : String(title),
+  },
+  text == null ? '' : String(text),
+);
+
+const courseTableColumns = [
+  {
+    key: 'kcmc',
+    dataKey: 'kcmc',
+    title: '课程名称',
+    width: 180,
+    flexGrow: 1,
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.kcmc),
+  },
+  {
+    key: 'jsxx',
+    dataKey: 'jsxx',
+    title: '教师',
+    width: 110,
+    headerCellRenderer: () => h(
+      'div',
+      { class: 'teacher-column-header' },
+      [
+        h('span', '教师'),
+        h(
+          ElIcon,
+          {
+            class: 'teacher-info-toggle',
+            title: showFullTeacherInfo.value ? '隐藏完整教师信息' : '显示完整教师信息',
+            onClick: () => {
+              showFullTeacherInfo.value = !showFullTeacherInfo.value;
+            },
+          },
+          { default: () => h(showFullTeacherInfo.value ? View : Hide) },
+        ),
+      ],
+    ),
+    cellRenderer: ({ rowData }) => renderTextCell(
+      showFullTeacherInfo.value ? rowData.jsxx : getTeacherDisplayName(rowData.jsxx),
+      rowData.jsxx,
+    ),
+  },
+  {
+    key: 'sksj',
+    dataKey: 'sksj',
+    title: '上课时间',
+    width: 200,
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.sksj),
+  },
+  {
+    key: 'jxdd',
+    dataKey: 'jxdd',
+    title: '上课地点',
+    width: 120,
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.jxdd),
+  },
+  {
+    key: 'yxrs',
+    dataKey: 'yxrs',
+    title: '已选/容量',
+    width: 110,
+    sortable: true,
+    cellRenderer: ({ rowData }) => renderTextCell(`${rowData.yxrs}/${rowData.jxbrl}`),
+  },
+  {
+    key: 'ratio',
+    dataKey: 'ratio',
+    title: '报录比',
+    width: 90,
+    sortable: true,
+    cellRenderer: ({ rowData }) => renderTextCell((rowData.parsed.ratio || 0).toFixed(2)),
+  },
+  {
+    key: 'week',
+    dataKey: 'week',
+    title: '周',
+    width: 70,
+    sortable: true,
+    cellRenderer: ({ rowData }) => renderTextCell(rowData.parsed.week),
+  },
+  {
+    key: 'day',
+    dataKey: 'day',
+    title: '天',
+    width: 70,
+    sortable: true,
+    cellRenderer: ({ rowData }) => renderTextCell(dayMap[rowData.parsed.day]),
+  },
+  {
+    key: 'startPeriod',
+    dataKey: 'startPeriod',
+    title: '节',
+    width: 70,
+    sortable: true,
+    cellRenderer: ({ rowData }) => renderTextCell(
+      `${rowData.parsed.startPeriod}-${rowData.parsed.endPeriod}`,
+    ),
+  },
+];
+
+const courseSortValueGetters = {
+  yxrs: course => course.yxrs,
+  ratio: course => course.parsed.ratio,
+  week: course => course.parsed.week,
+  day: course => course.parsed.day,
+  startPeriod: course => course.parsed.startPeriod,
+};
+
+const sortedFilteredCourses = computed(() => {
+  const valueGetter = courseSortValueGetters[courseSort.value.key];
+  if (!valueGetter) return filteredCourses.value;
+
+  const direction = courseSort.value.order === TableV2SortOrder.ASC ? 1 : -1;
+  return [...filteredCourses.value].sort((courseA, courseB) => {
+    const valueA = valueGetter(courseA);
+    const valueB = valueGetter(courseB);
+    return (valueA - valueB) * direction;
+  });
+});
+
+const handleCourseSort = ({ key, order }) => {
+  courseSort.value = { key, order };
+};
+
+const courseTableRowClass = ({ rowIndex }) => (
+  rowIndex % 2 === 1 ? 'course-table-row--striped' : ''
+);
 
 // 选课方案模板
 const planTemplates = ref([
@@ -311,7 +424,7 @@ const parseEndPeriod = (sksj) => {
 // 预处理所有课程
 const preprocessCourses = (courses) => {
   return courses
-    .map(course => {
+    .map((course, index) => {
       const jxbrl = parseInt(course.jxbrl, 10);
       const yxrs = parseInt(course.yxrs, 10);
       const week = parseWeek(course.sksj);
@@ -328,6 +441,7 @@ const preprocessCourses = (courses) => {
 
       return {
         ...course,
+        virtualRowKey: course.jxb_id || `${course.kcmc}-${course.sksj}-${index}`,
         jxbrl, // 确保是数字
         yxrs,  // 确保是数字
         parsed: {
@@ -635,6 +749,28 @@ onMounted(async () => {
 /* 课程总览表格的默认高度 */
 .main-course-table {
   height: 600px;
+  width: 100%;
+}
+.course-table-cell-text {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.teacher-column-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.teacher-info-toggle {
+  cursor: pointer;
+}
+.course-table-row--striped {
+  background-color: var(--el-fill-color-lighter);
+}
+.course-table-empty {
+  color: var(--el-text-color-secondary);
 }
 
 /* 添加媒体查询以实现移动端适配 */
@@ -654,7 +790,6 @@ onMounted(async () => {
   }
 
   /* 修复表格在移动端显示不全的问题，允许横向滚动 */
-  .main-course-table .el-table__body-wrapper,
   .plan-result-table .el-table__body-wrapper {
     overflow-x: auto;
   }

@@ -204,7 +204,7 @@
                     <el-auto-resizer>
                       <template #default="{ height, width }">
                         <el-table-v2
-                          :columns="courseTableColumns"
+                          :columns="getCourseTableColumns(width)"
                           :data="sortedFilteredCourses"
                           :width="width"
                           :height="height"
@@ -383,8 +383,7 @@ const courseTableColumns = [
     key: 'kcmc',
     dataKey: 'kcmc',
     title: '课程名称',
-    width: 150,
-    flexGrow: 1,
+    width: 80,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.kcmc),
   },
   {
@@ -419,7 +418,7 @@ const courseTableColumns = [
     key: 'sksj',
     dataKey: 'sksj',
     title: '上课时间',
-    width: 145,
+    width: 180,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.sksj),
   },
   {
@@ -441,7 +440,7 @@ const courseTableColumns = [
     key: 'ratio',
     dataKey: 'ratio',
     title: '报录比',
-    width: 68,
+    width: 100,
     sortable: true,
     cellRenderer: ({ rowData }) => renderTextCell(rowData.display.ratio),
   },
@@ -470,6 +469,21 @@ const courseTableColumns = [
     cellRenderer: ({ rowData }) => renderTextCell(rowData.display.period),
   },
 ];
+
+const getCourseTableColumns = (tableWidth) => {
+  const fixedColumnsWidth = courseTableColumns
+    .slice(1)
+    .reduce((total, column) => total + column.width, 0);
+  const courseNameWidth = Math.max(
+    courseTableColumns[0].width,
+    Math.floor(tableWidth - fixedColumnsWidth),
+  );
+
+  return [
+    { ...courseTableColumns[0], width: courseNameWidth },
+    ...courseTableColumns.slice(1),
+  ];
+};
 
 const courseSortValueGetters = {
   yxrs: course => course.yxrs,

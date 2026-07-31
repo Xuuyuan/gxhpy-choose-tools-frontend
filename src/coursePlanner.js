@@ -31,8 +31,13 @@ export const matchesPeriodType = (course, periodType) => {
 
   if (periodType === 1) return isStandardPeriod(startPeriod, endPeriod);
   if (periodType === 0) return isTwoPeriods;
-  if (periodType === 2) return isTwoPeriods && startPeriod !== 1;
+  if (periodType === 2) return endPeriod >= startPeriod;
   return false;
+};
+
+export const overlapsEarlyPeriods = (course) => {
+  const { startPeriod, endPeriod } = course.parsed;
+  return startPeriod <= 2 && endPeriod >= 1;
 };
 
 export const overlapsLatePeriods = (course) => {

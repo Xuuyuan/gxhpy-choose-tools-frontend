@@ -3,10 +3,8 @@
     
     <el-header class="app-header">
       <div class="app-header-content">
-        <div class="app-mark">优</div>
         <div>
           <div class="app-title">个性化培养周选课工具</div>
-          <div class="app-subtitle">课程筛选与低报录比方案生成</div>
         </div>
       </div>
     </el-header>
@@ -139,11 +137,14 @@
                        <el-select v-model="template.periodType">
                         <el-option label="仅标准2节课 (1-2, 3-4...)" :value="1" />
                         <el-option label="任意2节课 (1-2, 2-3...)" :value="0" />
-                        <el-option label="任意2节课 (不含1-2)" :value="2" />
+                        <el-option label="任意课程" :value="2" />
                       </el-select>
                     </el-form-item>
                     <el-form-item label="课程门数">
                       <el-input-number v-model="template.maxCourses" :min="1" :max="12" controls-position="right" />
+                    </el-form-item>
+                    <el-form-item>
+                      <el-checkbox v-model="template.excludeEarlyPeriods">排除早八（第1-2节）</el-checkbox>
                     </el-form-item>
                     <el-form-item>
                       <el-checkbox v-model="template.excludeLatePeriods">排除晚课（第9-12节）</el-checkbox>
@@ -241,7 +242,7 @@
           </el-row>
         </el-tab-pane>
 
-        <el-tab-pane label="生成的选课方案" name="results">
+        <el-tab-pane label="生成的选课方案" name="results" class="results-pane">
           <div v-if="generatedPlans.length === 0" class="result-empty">
             请先在“课程筛选与方案配置”标签页中配置并点击“生成选课方案”
           </div>
@@ -293,6 +294,7 @@ import { View, Hide } from '@element-plus/icons-vue'
 import {
   findOptimalCoursePlan,
   matchesPeriodType,
+  overlapsEarlyPeriods,
   overlapsLatePeriods,
 } from './coursePlanner.js';
 
@@ -499,7 +501,7 @@ const courseTableRowClass = ({ rowIndex }) => (
 
 // 选课方案模板
 const planTemplates = ref([
-  // { week: 周数, periodType: 规格(0,1,2), days: [星期几], excludeLatePeriods: 是否排除晚课, maxCourses: 数量 }
+  // { week: 周数, periodType: 规格(0,1,2), days: [星期几], excludeEarlyPeriods: 是否排除早八, excludeLatePeriods: 是否排除晚课, maxCourses: 数量 }
   
   // 第一阶段（校级-第一轮）默认方案
   // { week: 10, periodType: 1, days: [1], maxCourses: 4 },
@@ -510,8 +512,8 @@ const planTemplates = ref([
   // { week: 10, periodType: 2, days: [5], maxCourses: 2 },
 
   // 第三阶段（院级-第三轮）默认方案
-  { week: 11, periodType: 2, days: [1], excludeLatePeriods: false, maxCourses: 3 },
-  { week: 11, periodType: 2, days: [5], excludeLatePeriods: false, maxCourses: 3 },
+  { week: 11, periodType: 0, days: [1], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 3 },
+  { week: 11, periodType: 0, days: [5], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 3 },
 ]);
 
 // --- 辅助函数 (数据预处理) ---
@@ -606,6 +608,8 @@ const generatePlans = () => {
       if (c.parsed.week !== template.week) return false;
       // 匹配天
       if (!template.days.includes(c.parsed.day)) return false;
+      // 按模板排除与第1-2节重叠的早八课程
+      if (template.excludeEarlyPeriods && overlapsEarlyPeriods(c)) return false;
       // 按模板排除与第9-12节重叠的晚课
       if (template.excludeLatePeriods && overlapsLatePeriods(c)) return false;
       
@@ -702,6 +706,7 @@ const addTemplate = () => {
     week: 7,
     periodType: 0,
     days: [1, 2, 3, 4, 5],
+    excludeEarlyPeriods: false,
     excludeLatePeriods: false,
     maxCourses: 8
   });
@@ -1013,6 +1018,42 @@ body {
   text-align: center;
 }
 
+.results-pane {
+  min-height: 320px;
+  padding: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+}
+
+.results-pane .el-collapse {
+  border-radius: 10px;
+}
+
+.results-pane .el-collapse-item__header {
+  min-width: 0;
+  height: auto;
+  min-height: 48px;
+  padding: 10px 8px;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.results-pane .el-collapse-item__title {
+  display: block;
+  min-width: 0;
+  padding-right: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.results-pane .el-collapse-item__arrow {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
 .app-footer {
   height: auto;
   padding: 6px 16px 22px;
@@ -1178,6 +1219,16 @@ body {
 
   .template-actions {
     grid-template-columns: 1fr;
+  }
+
+  .results-pane {
+    min-height: 260px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .result-empty {
+    padding: 52px 16px;
   }
 }
 </style>

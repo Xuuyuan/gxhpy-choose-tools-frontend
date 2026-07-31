@@ -6,6 +6,7 @@ import {
   estimateSelectionProbability,
   findOptimalCoursePlan,
   matchesPeriodType,
+  overlapsEarlyPeriods,
   overlapsLatePeriods,
 } from '../src/coursePlanner.js';
 
@@ -84,6 +85,19 @@ test('任意两节课只接受恰好连续两节的课程', () => {
   assert.equal(matchesPeriodType(createCourse({ name: '两节', start: 2, end: 3 }), 0), true);
   assert.equal(matchesPeriodType(createCourse({ name: '单节', start: 2, end: 2 }), 0), false);
   assert.equal(matchesPeriodType(createCourse({ name: '倒序', start: 3, end: 2 }), 0), false);
+});
+
+test('任意课程接受合法的单节、两节和多节课程', () => {
+  assert.equal(matchesPeriodType(createCourse({ name: '单节', start: 3, end: 3 }), 2), true);
+  assert.equal(matchesPeriodType(createCourse({ name: '两节', start: 3, end: 4 }), 2), true);
+  assert.equal(matchesPeriodType(createCourse({ name: '多节', start: 3, end: 6 }), 2), true);
+  assert.equal(matchesPeriodType(createCourse({ name: '倒序', start: 4, end: 3 }), 2), false);
+});
+
+test('早八判断会排除所有与第1-2节重叠的课程', () => {
+  assert.equal(overlapsEarlyPeriods(createCourse({ name: '1-2节', start: 1, end: 2 })), true);
+  assert.equal(overlapsEarlyPeriods(createCourse({ name: '2-3节', start: 2, end: 3 })), true);
+  assert.equal(overlapsEarlyPeriods(createCourse({ name: '3-4节', start: 3, end: 4 })), false);
 });
 
 test('晚课判断会排除所有与第9-12节重叠的课程', () => {

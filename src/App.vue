@@ -138,7 +138,20 @@
                           @column-sort="handleCourseSort"
                         >
                           <template #empty>
-                            <div class="course-table-empty">暂无数据</div>
+                            <el-empty :image-size="96" class="course-table-empty">
+                              <template #description>
+                                <p class="course-table-empty-title">
+                                  {{ processedCourses.length === 0
+                                    ? '暂未获取到课程列表'
+                                    : '没有符合筛选条件的课程' }}
+                                </p>
+                                <p class="course-table-empty-hint">
+                                  {{ processedCourses.length === 0
+                                    ? '请点击右上角刷新，或上传本地 JSON 文件'
+                                    : '请尝试调整报录比、容量、校区或地点条件' }}
+                                </p>
+                              </template>
+                            </el-empty>
                           </template>
                         </el-table-v2>
                       </template>
@@ -755,8 +768,38 @@ onMounted(async () => {
 .course-table-row--striped {
   background-color: var(--el-fill-color-lighter);
 }
+.main-course-table .el-table-v2__empty {
+  display: flex;
+  height: calc(100% - 50px);
+  align-items: center;
+  justify-content: center;
+}
 .course-table-empty {
+  width: min(420px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 20px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--el-fill-color-extra-light), #fff);
+}
+.course-table-empty .el-empty__image {
+  opacity: 0.8;
+}
+.course-table-empty .el-empty__description {
+  margin-top: 14px;
+}
+.course-table-empty-title {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.course-table-empty-hint {
+  margin: 6px 0 0;
   color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 /* 添加媒体查询以实现移动端适配 */

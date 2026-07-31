@@ -1,17 +1,23 @@
 <template>
-  <el-container style="min-height: 100vh; width: 100%;">
+  <el-container class="app-shell">
     
     <el-header class="app-header">
-      个性化培养周选课工具
+      <div class="app-header-content">
+        <div class="app-mark">优</div>
+        <div>
+          <div class="app-title">个性化培养周选课工具</div>
+          <div class="app-subtitle">课程筛选与低报录比方案生成</div>
+        </div>
+      </div>
     </el-header>
 
     <el-main v-loading="loading" element-loading-text="正在加载课程数据..." class="app-main">
-      <el-tabs v-model="activeTab">
+      <el-tabs v-model="activeTab" class="app-tabs">
         
         <el-tab-pane label="课程筛选与方案配置" name="config">
-          <el-row :gutter="20">
+          <el-row :gutter="24" class="workspace-grid">
             <el-col :span="24" :md="8">
-              <el-card header="1. 基本筛选条件">
+              <el-card header="1. 基本筛选条件" class="panel-card filter-card">
                 <el-form :model="filters" label-position="top">
 
                   <el-row :gutter="20">
@@ -107,10 +113,20 @@
                 </el-form>
               </el-card>
 
-              <el-card header="2. 选课方案模板" style="margin-top: 20px;">
+              <el-card header="2. 选课方案模板" class="panel-card template-card">
                 <div v-for="(template, index) in planTemplates" :key="index" class="plan-template">
-                  <strong>模板 {{ index + 1 }}</strong>
-                  <el-form :model="template" label-width="80px" size="small">
+                  <div class="plan-template-header">
+                    <strong><span class="template-index">{{ index + 1 }}</span>方案模板</strong>
+                    <el-button
+                      class="template-delete"
+                      type="danger"
+                      size="small"
+                      text
+                      @click="removeTemplate(index)"
+                      :icon="Delete"
+                    >删除</el-button>
+                  </div>
+                  <el-form :model="template" label-position="top" size="small" class="template-form">
                     <el-form-item label="开课周">
                       <el-input-number v-model="template.week" :min="1" :max="20" controls-position="right" />
                     </el-form-item>
@@ -133,25 +149,27 @@
                       <el-checkbox v-model="template.excludeLatePeriods">排除晚课（第9-12节）</el-checkbox>
                     </el-form-item>
                   </el-form>
-                  <el-button type="danger" size="small" @click="removeTemplate(index)" circle :icon="Delete" />
                 </div>
-                <el-button type="primary" @click="addTemplate" :icon="Plus" round>添加方案模板</el-button>
-                <el-button type="success" @click="generatePlans" :icon="Promotion" round style="margin-top: 10px; width: 100%;">
-                  生成选课方案
-                </el-button>
+                <div class="template-actions">
+                  <el-button @click="addTemplate" :icon="Plus" plain>添加模板</el-button>
+                  <el-button type="primary" @click="generatePlans" :icon="Promotion">
+                    生成选课方案
+                  </el-button>
+                </div>
               </el-card>
             </el-col>
             
             <el-col :span="24" :md="16">
-              <el-card>
+              <el-card class="panel-card course-overview-card">
                 <template #header>
-                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <span>
-                      课程总览 ({{ filteredCourses.length }}/{{ processedCourses.length }})
-                      <span v-if="jsonUpdateTime"> → 更新于 {{ jsonUpdateTime }}</span>
-                    </span>
+                  <div class="course-toolbar">
+                    <div class="course-toolbar-title">
+                      <strong>课程总览</strong>
+                      <span class="course-count">{{ filteredCourses.length }} / {{ processedCourses.length }}</span>
+                      <small v-if="jsonUpdateTime">更新于 {{ jsonUpdateTime }}</small>
+                    </div>
                     
-                    <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="course-toolbar-actions">
                       <el-link type="warning" href="./get_classes.zip" :icon="Download" target="_blank">下载脚本</el-link>
                       
                       <input 
@@ -224,7 +242,7 @@
         </el-tab-pane>
 
         <el-tab-pane label="生成的选课方案" name="results">
-          <div v-if="generatedPlans.length === 0" style="text-align: center; color: #999; padding: 40px;">
+          <div v-if="generatedPlans.length === 0" class="result-empty">
             请先在“课程筛选与方案配置”标签页中配置并点击“生成选课方案”
           </div>
           <el-collapse v-model="activePlanNames">
@@ -259,7 +277,7 @@
       </el-tabs>
     </el-main>
 
-    <el-footer style="text-align: center; padding: 10px; font-size: 12px; color: #888;">
+    <el-footer class="app-footer">
       <el-text><el-link href="https://github.com/Xuuyuan" target="_blank">@Xuuyuan Generated by Gemini</el-link> | <el-link href="https://github.com/Xuuyuan/gxhpy-choose-tools-frontend" target="_blank">GitHub</el-link></el-text>
     </el-footer>
   </el-container>
@@ -740,30 +758,269 @@ onMounted(async () => {
 </script>
 
 <style>
-/* 简单的样式 */
+html,
+body,
+#app {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f4f7fb;
+  color: #1f2937;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.app-shell {
+  width: 100%;
+  min-height: 100vh;
+  --el-color-primary: #2563eb;
+  --el-border-radius-base: 8px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.08), transparent 28%),
+    #f4f7fb;
+}
+
 .app-header {
-  background-color: #409EFF;
+  height: 78px;
+  padding: 0 28px;
   color: #fff;
-  text-align: center;
+  background: linear-gradient(120deg, #1d4ed8 0%, #2563eb 55%, #0ea5e9 100%);
+  box-shadow: 0 8px 26px rgba(30, 64, 175, 0.2);
+}
+
+.app-header-content {
+  display: flex;
+  width: min(1440px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   font-size: 20px;
-  line-height: 60px;
-  height: 60px; /* 显式设置默认高度 */
+  font-weight: 700;
 }
-.el-card {
+
+.app-title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.app-subtitle {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+}
+
+.app-main {
+  width: min(1488px, 100%);
+  margin: 0 auto;
+  padding: 22px 24px 32px;
+}
+
+.app-tabs > .el-tabs__header {
+  margin: 0 0 18px;
+  padding: 0 16px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.04);
+}
+
+.app-tabs > .el-tabs__header .el-tabs__nav-wrap::after {
+  display: none;
+}
+
+.app-tabs .el-tabs__item {
+  height: 48px;
+  font-weight: 500;
+}
+
+.panel-card.el-card {
   margin-bottom: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
 }
+
+.panel-card > .el-card__header {
+  padding: 18px 20px;
+  border-bottom-color: #edf2f7;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.panel-card > .el-card__body {
+  padding: 20px;
+}
+
+.filter-card .el-form-item {
+  margin-bottom: 18px;
+}
+
+.filter-card .el-form-item__label,
+.template-form .el-form-item__label {
+  color: #475569;
+  font-weight: 500;
+}
+
+.template-card {
+  margin-top: 0;
+}
+
 .plan-template {
-  border: 1px solid #ebeef5;
-  padding: 10px;
-  margin-bottom: 10px;
-  border-radius: 4px;
-  position: relative;
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff, #f8fafc);
 }
-.plan-template .el-button[type="danger"] {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+
+.plan-template-header {
+  display: flex;
+  margin-bottom: 14px;
+  align-items: center;
+  justify-content: space-between;
 }
+
+.plan-template-header strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.template-index {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  color: #1d4ed8;
+  background: #dbeafe;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.template-delete {
+  margin-left: auto;
+}
+
+.template-form .el-form-item {
+  margin-bottom: 14px;
+}
+
+.template-form .el-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.template-form .el-input-number,
+.template-form .el-select {
+  width: 100%;
+}
+
+.plan-template .el-checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  gap: 6px 2px;
+}
+
+.plan-template .el-checkbox-group .el-checkbox {
+  width: auto;
+  margin-right: 0;
+}
+
+.template-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 10px;
+}
+
+.template-actions .el-button {
+  width: 100%;
+  margin: 0;
+}
+
+.course-overview-card > .el-card__body {
+  padding: 0 20px 20px;
+}
+
+.course-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.course-toolbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.course-toolbar-title strong {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.course-toolbar-title small {
+  overflow: hidden;
+  color: #94a3b8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-count {
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.course-toolbar-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.result-empty {
+  padding: 72px 24px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: center;
+}
+
+.app-footer {
+  height: auto;
+  padding: 6px 16px 22px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
+}
+
 .filter-label-with-tooltip {
   cursor: help;
   text-decoration: underline dotted var(--el-text-color-placeholder);
@@ -773,13 +1030,8 @@ onMounted(async () => {
   max-width: 340px;
   line-height: 1.6;
 }
-.el-checkbox-group .el-checkbox {
-  width: 80px; /* 调整复选框间距 */
-}
-
-/* 课程总览表格的默认高度 */
 .main-course-table {
-  height: 600px;
+  height: 580px;
   width: 100%;
 }
 .course-table-cell-text {
@@ -798,7 +1050,7 @@ onMounted(async () => {
   cursor: pointer;
 }
 .course-table-row--striped {
-  background-color: var(--el-fill-color-lighter);
+  background-color: #f8fafc;
 }
 .main-course-table .el-table-v2__empty {
   display: flex;
@@ -810,9 +1062,9 @@ onMounted(async () => {
   width: min(420px, calc(100% - 32px));
   margin: 0 auto;
   padding: 24px 20px;
-  border: 1px dashed var(--el-border-color);
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--el-fill-color-extra-light), #fff);
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fafc, #fff);
 }
 .course-table-empty .el-empty__image {
   opacity: 0.8;
@@ -834,20 +1086,58 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
-/* 添加媒体查询以实现移动端适配 */
 @media (max-width: 767px) {
   .app-header {
-    height: 50px;
-    line-height: 50px;
-    font-size: 18px;
+    height: 64px;
+    padding: 0 16px;
   }
-  
+
+  .app-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    font-size: 17px;
+  }
+
+  .app-title {
+    font-size: 17px;
+  }
+
+  .app-subtitle {
+    display: none;
+  }
+
   .app-main {
-    padding: 10px; /* 减少 main 区域的内边距 */
+    padding: 14px 12px 24px;
+  }
+
+  .app-tabs > .el-tabs__header {
+    margin-bottom: 14px;
+    padding: 0 8px;
+  }
+
+  .app-tabs .el-tabs__item {
+    height: 44px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .panel-card.el-card {
+    margin-bottom: 14px;
+    border-radius: 12px;
+  }
+
+  .panel-card > .el-card__header,
+  .panel-card > .el-card__body {
+    padding: 16px;
+  }
+
+  .plan-template {
+    padding: 14px;
   }
 
   .main-course-table {
-    height: 450px; /* 移动端表格高度 */
+    height: 430px;
   }
 
   /* 修复表格在移动端显示不全的问题，允许横向滚动 */
@@ -855,29 +1145,39 @@ onMounted(async () => {
     overflow-x: auto;
   }
 
-  /* 修复 el-tabs 在移动端的内边距 */
-  .el-tabs__content {
-    padding: 16px 5px;
+  .course-overview-card > .el-card__body {
+    padding: 0 12px 12px;
   }
 
-  /* 方案模板中的星期选择，改为垂直堆叠 */
-  .plan-template .el-checkbox-group {
-    display: flex;
+  .course-toolbar {
+    align-items: flex-start;
     flex-direction: column;
   }
-  .plan-template .el-checkbox-group .el-checkbox {
-    width: auto; /* 取消固定宽度 */
-    margin-right: 0;
+
+  .course-toolbar-title {
+    width: 100%;
   }
-  
-  /* 筛选条件中的校区选择，改为垂直堆叠 */
+
+  .course-toolbar-title small {
+    margin-left: auto;
+  }
+
+  .course-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .responsive-checkbox-group {
     display: flex;
     flex-direction: column;
   }
   .responsive-checkbox-group .el-checkbox {
-     width: auto; /* 取消固定宽度 */
-     margin-right: 0;
+    width: auto;
+    margin-right: 0;
+  }
+
+  .template-actions {
+    grid-template-columns: 1fr;
   }
 }
 </style>

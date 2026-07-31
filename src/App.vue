@@ -194,8 +194,9 @@
 <script setup>
 // 导入 watch 用于响应式筛选
 import { computed, h, ref, reactive, onMounted, watch } from 'vue';
-import axios from 'axios';
 import { ElIcon, ElMessage, TableV2SortOrder } from 'element-plus';
+import 'element-plus/es/components/icon/style/css';
+import 'element-plus/es/components/message/style/css';
 import { Delete, Plus, Promotion, Refresh, Upload, Download } from '@element-plus/icons-vue';
 import { View, Hide } from '@element-plus/icons-vue'
 
@@ -685,13 +686,19 @@ const fetchCourses = async (isManualRefresh = false) => {
     loading.value = true;
     
     const url = `https://oss.nekoark.com/gxhpy_classes.json?t=${new Date().getTime()}`;
-    const response = await axios.get(url);
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`请求失败 (${response.status})`);
+    }
+
+    const data = await response.json();
     
-    if (response.data && response.data.courses) {
-      allCourses.value = response.data.courses;
+    if (data && data.courses) {
+      allCourses.value = data.courses;
       // 从网络获取时，正常显示更新时间
-      jsonUpdateTime.value = response.data.update_time || '未知';
-      processedCourses.value = preprocessCourses(response.data.courses);
+      jsonUpdateTime.value = data.update_time || '未知';
+      processedCourses.value = preprocessCourses(data.courses);
       
       applyFilters(); // 加载完数据后手动筛选
 

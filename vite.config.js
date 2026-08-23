@@ -22,6 +22,24 @@ export default defineConfig(({ command }) => ({
     }),
     command === 'serve' ? vueDevTools() : null,
   ].filter(Boolean),
+  server: {
+    proxy: {
+      '/gxhpy_classes.json': {
+        target: 'https://oss.nekoark.com',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
+  preview: {
+    proxy: {
+      '/gxhpy_classes.json': {
+        target: 'https://oss.nekoark.com',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

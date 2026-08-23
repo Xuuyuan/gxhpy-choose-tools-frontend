@@ -4,12 +4,17 @@
     <el-header class="app-header">
       <div class="app-header-content">
         <div>
-          <div class="app-title">个性化培养周选课工具</div>
+          <h1 class="app-title">个性化培养周选课工具</h1>
         </div>
       </div>
     </el-header>
 
-    <el-main v-loading="loading" element-loading-text="正在加载课程数据..." class="app-main">
+    <el-main
+      v-loading="loading"
+      element-loading-text="正在加载课程数据..."
+      class="app-main"
+      :aria-busy="loading"
+    >
       <el-tabs v-model="activeTab" class="app-tabs">
         
         <el-tab-pane label="课程筛选与方案配置" name="config">
@@ -112,9 +117,17 @@
               </el-card>
 
               <el-card header="2. 选课方案模板" class="panel-card template-card">
-                <div v-for="(template, index) in planTemplates" :key="index" class="plan-template">
+                <div
+                  v-for="(template, index) in planTemplates"
+                  :key="index"
+                  class="plan-template"
+                  role="group"
+                  :aria-labelledby="`plan-template-title-${index}`"
+                >
                   <div class="plan-template-header">
-                    <strong><span class="template-index">{{ index + 1 }}</span>方案模板</strong>
+                    <strong :id="`plan-template-title-${index}`">
+                      <span class="template-index">{{ index + 1 }}</span>方案模板
+                    </strong>
                     <el-button
                       class="template-delete"
                       type="danger"
@@ -122,6 +135,7 @@
                       text
                       @click="removeTemplate(index)"
                       :icon="Delete"
+                      :aria-label="`删除方案模板 ${index + 1}`"
                     >删除</el-button>
                   </div>
                   <el-form :model="template" label-position="top" size="small" class="template-form">
@@ -161,118 +175,25 @@
             </el-col>
             
             <el-col :span="24" :lg="17">
-              <el-card class="panel-card course-overview-card">
-                <template #header>
-                  <div class="course-toolbar">
-                    <div class="course-toolbar-title">
-                      <strong>课程总览</strong>
-                      <span class="course-count">{{ filteredCourses.length }} / {{ processedCourses.length }}</span>
-                      <small v-if="jsonUpdateTime">更新于 {{ jsonUpdateTime }}</small>
-                    </div>
-                    
-                    <div class="course-toolbar-actions">
-                      <el-link type="warning" href="./get_classes.zip" :icon="Download" target="_blank">下载脚本</el-link>
-                      
-                      <input 
-                        ref="fileInput"
-                        type="file" 
-                        accept=".json" 
-                        style="display: none;" 
-                        @change="handleFileSelected"
-                      />
-                      
-                      <el-button 
-                        type="primary" 
-                        :icon="Upload" 
-                        plain 
-                        @click="triggerFileInput"
-                      >
-                        上传JSON
-                      </el-button>
-                      
-                      <el-button
-                        type="primary"
-                        :icon="Refresh"
-                        circle
-                        :loading="loading"
-                        @click="() => fetchCourses(true)"
-                      />
-                    </div>
-                  </div>
-                </template>
-                  <div class="main-course-table">
-                    <el-auto-resizer>
-                      <template #default="{ height, width }">
-                        <el-table-v2
-                          :columns="getCourseTableColumns(width)"
-                          :data="sortedFilteredCourses"
-                          :width="width"
-                          :height="height"
-                          :row-height="50"
-                          :header-height="50"
-                          :sort-by="courseSort"
-                          :row-class="courseTableRowClass"
-                          row-key="virtualRowKey"
-                          fixed
-                          scrollbar-always-on
-                          @column-sort="handleCourseSort"
-                        >
-                          <template #empty>
-                            <el-empty :image-size="96" class="course-table-empty">
-                              <template #description>
-                                <p class="course-table-empty-title">
-                                  {{ processedCourses.length === 0
-                                    ? '暂未获取到课程列表'
-                                    : '没有符合筛选条件的课程' }}
-                                </p>
-                                <p class="course-table-empty-hint">
-                                  {{ processedCourses.length === 0
-                                    ? '请点击右上角刷新，或上传本地 JSON 文件'
-                                    : '请尝试调整报录比、容量、校区、地点或课程名称条件' }}
-                                </p>
-                              </template>
-                            </el-empty>
-                          </template>
-                        </el-table-v2>
-                      </template>
-                    </el-auto-resizer>
-                  </div>
-              </el-card>
+              <CourseOverview
+                :courses="processedCourses"
+                :filtered-courses="filteredCourses"
+                :update-time="jsonUpdateTime"
+                :loading="loading"
+                :load-error="courseLoadError"
+                @file-selected="handleFileSelected"
+                @refresh="fetchCourses(true)"
+              />
             </el-col>
           </el-row>
         </el-tab-pane>
 
-        <el-tab-pane label="生成的选课方案" name="results" class="results-pane">
-          <div v-if="generatedPlans.length === 0" class="result-empty">
-            请先在“课程筛选与方案配置”标签页中配置并点击“生成选课方案”
-          </div>
-          <el-collapse v-model="activePlanNames">
-            <el-collapse-item 
-              v-for="(plan, index) in generatedPlans" 
-              :key="index"
-              :name="index"
-              :title="`方案 ${index + 1} (模板: 周${plan.template.week}, 天[${plan.template.days.join(',')}], 规格${plan.template.periodType}) - 共 ${plan.courses.length} 门，估算全选成功率 ${formatProbability(plan.metrics.jointProbability)}`">
-              
-              <el-table :data="plan.courses" stripe border class="plan-result-table">
-                <el-table-column type="index" width="50" />
-                <el-table-column prop="kcmc" label="课程名称" min-width="180" />
-                <el-table-column prop="jsxx" label="教师信息" width="150" />
-                <el-table-column prop="sksj" label="上课时间" width="180" />
-                <el-table-column prop="jxdd" label="上课地点" width="150" />
-                <el-table-column label="已选/容量" width="100">
-                  <template #default="{ row }">
-                    {{ row.yxrs }}/{{ row.jxbrl }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="报录比" width="100">
-                  <template #default="{ row }">
-                    {{ (row.parsed.ratio || 0).toFixed(2) }}
-                  </template>
-                </el-table-column>
-              </el-table>
-
-            </el-collapse-item>
-          </el-collapse>
+        <el-tab-pane label="生成的选课方案" name="results">
+          <PlanResults
+            :plans="generatedPlans"
+            :empty-message="resultsEmptyMessage"
+            v-model:active-plan-names="activePlanNames"
+          />
         </el-tab-pane>
 
       </el-tabs>
@@ -285,32 +206,64 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, reactive, ref, shallowRef } from 'vue';
-import { ElIcon, ElMessage, TableV2SortOrder } from 'element-plus';
-import 'element-plus/es/components/icon/style/css';
+import { computed, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import { ElMessage } from 'element-plus';
 import 'element-plus/es/components/message/style/css';
-import { Delete, Plus, Promotion, Refresh, Upload, Download } from '@element-plus/icons-vue';
-import { View, Hide } from '@element-plus/icons-vue'
+import { Delete, Plus, Promotion } from '@element-plus/icons-vue';
+import CourseOverview from './components/CourseOverview.vue';
+import PlanResults from './components/PlanResults.vue';
+import { dayMap, prepareCourseData } from './courseData.js';
 import {
   findOptimalCoursePlan,
   matchesPeriodType,
   overlapsEarlyPeriods,
   overlapsLatePeriods,
 } from './coursePlanner.js';
+import { fetchCoursePayload, formatCourseRequestError } from './courseService.js';
+import { validatePlanConfiguration } from './planConfiguration.js';
 
 // --- 状态定义 ---
 
 const loading = ref(true);
 const activeTab = ref('config');
 const jsonUpdateTime = ref(''); // 存储更新时间
+const courseLoadError = ref('');
 const processedCourses = shallowRef([]); // 经过预处理的课程数据
 const generatedPlans = shallowRef([]); // 生成的方案
-const activePlanNames = ref([0]); // 默认展开第一个方案
-const showFullTeacherInfo = ref(false) // 教师信息显示
+const activePlanNames = ref([]);
+const defaultResultsEmptyMessage = '请先配置并生成选课方案。';
+const resultsEmptyMessage = ref(defaultResultsEmptyMessage);
+const courseDataUrl = import.meta.env.VITE_COURSE_DATA_URL || '/gxhpy_classes.json';
+let courseLoadSequence = 0;
+let activeRemoteRequestController = null;
+let activeFileReader = null;
 
-// 【新增】: 创建一个 ref 来引用原生的 input
-const fileInput = ref(null);
-const courseDataUrl = 'https://oss.nekoark.com/gxhpy_classes.json';
+const beginCourseLoad = ({ requestController = null, fileReader = null } = {}) => {
+  courseLoadSequence += 1;
+  const loadId = courseLoadSequence;
+  const previousRequestController = activeRemoteRequestController;
+  const previousFileReader = activeFileReader;
+
+  activeRemoteRequestController = requestController;
+  activeFileReader = fileReader;
+  previousRequestController?.abort();
+  if (previousFileReader?.readyState === 1) {
+    previousFileReader.abort();
+  }
+
+  loading.value = true;
+  courseLoadError.value = '';
+  return loadId;
+};
+
+const isActiveCourseLoad = loadId => loadId === courseLoadSequence;
+
+const finishCourseLoad = (loadId) => {
+  if (!isActiveCourseLoad(loadId)) return;
+  activeRemoteRequestController = null;
+  activeFileReader = null;
+  loading.value = false;
+};
 
 const filters = reactive({
   minRatio: 0.3,
@@ -349,170 +302,6 @@ const filteredCourses = computed(() => {
   });
 });
 
-// 课程总览排序状态；默认保持原表格按报录比降序的行为
-const courseSort = ref({
-  key: 'ratio',
-  order: TableV2SortOrder.DESC,
-});
-
-// 星期映射
-const dayMap = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日' };
-const dayMapReverse = {
-  '星期一': 1, '星期二': 2, '星期三': 3, '星期四': 4, '星期五': 5, '星期六': 6, '星期日': 7
-};
-
-const getTeacherDisplayName = (teacherInfo) => {
-  if (!teacherInfo) return '';
-  const parts = teacherInfo.split('/');
-  return parts.length > 1 ? parts[1] : teacherInfo;
-};
-
-const formatProbability = (probability) => `${(probability * 100).toFixed(2)}%`;
-
-const renderTextCell = (text, title = text) => h(
-  'span',
-  {
-    class: 'course-table-cell-text',
-    title: title == null ? '' : String(title),
-  },
-  text == null ? '' : String(text),
-);
-
-const courseTableColumns = [
-  {
-    key: 'kcmc',
-    dataKey: 'kcmc',
-    title: '课程名称',
-    width: 80,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.kcmc),
-  },
-  {
-    key: 'jsxx',
-    dataKey: 'jsxx',
-    title: '教师',
-    width: 88,
-    headerCellRenderer: () => h(
-      'div',
-      { class: 'teacher-column-header' },
-      [
-        h('span', '教师'),
-        h(
-          ElIcon,
-          {
-            class: 'teacher-info-toggle',
-            title: showFullTeacherInfo.value ? '隐藏完整教师信息' : '显示完整教师信息',
-            onClick: () => {
-              showFullTeacherInfo.value = !showFullTeacherInfo.value;
-            },
-          },
-          { default: () => h(showFullTeacherInfo.value ? View : Hide) },
-        ),
-      ],
-    ),
-    cellRenderer: ({ rowData }) => renderTextCell(
-      showFullTeacherInfo.value ? rowData.jsxx : rowData.display.teacherName,
-      rowData.jsxx,
-    ),
-  },
-  {
-    key: 'sksj',
-    dataKey: 'sksj',
-    title: '上课时间',
-    width: 180,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.sksj),
-  },
-  {
-    key: 'jxdd',
-    dataKey: 'jxdd',
-    title: '上课地点',
-    width: 88,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.jxdd),
-  },
-  {
-    key: 'yxrs',
-    dataKey: 'yxrs',
-    title: '已选/容量',
-    width: 86,
-    sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.selectedCapacity),
-  },
-  {
-    key: 'ratio',
-    dataKey: 'ratio',
-    title: '报录比',
-    width: 100,
-    sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.ratio),
-  },
-  {
-    key: 'week',
-    dataKey: 'week',
-    title: '周',
-    width: 48,
-    sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.parsed.week),
-  },
-  {
-    key: 'day',
-    dataKey: 'day',
-    title: '天',
-    width: 48,
-    sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.day),
-  },
-  {
-    key: 'startPeriod',
-    dataKey: 'startPeriod',
-    title: '节',
-    width: 55,
-    sortable: true,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.display.period),
-  },
-];
-
-const getCourseTableColumns = (tableWidth) => {
-  const fixedColumnsWidth = courseTableColumns
-    .slice(1)
-    .reduce((total, column) => total + column.width, 0);
-  const courseNameWidth = Math.max(
-    courseTableColumns[0].width,
-    Math.floor(tableWidth - fixedColumnsWidth),
-  );
-
-  return [
-    { ...courseTableColumns[0], width: courseNameWidth },
-    ...courseTableColumns.slice(1),
-  ];
-};
-
-const courseSortValueGetters = {
-  yxrs: course => course.yxrs,
-  ratio: course => course.parsed.ratio,
-  week: course => course.parsed.week,
-  day: course => course.parsed.day,
-  startPeriod: course => course.parsed.startPeriod,
-};
-
-const sortedFilteredCourses = computed(() => {
-  const valueGetter = courseSortValueGetters[courseSort.value.key];
-  if (!valueGetter) return filteredCourses.value;
-
-  const direction = courseSort.value.order === TableV2SortOrder.ASC ? 1 : -1;
-  return [...filteredCourses.value].sort((courseA, courseB) => {
-    const valueA = valueGetter(courseA);
-    const valueB = valueGetter(courseB);
-    return (valueA - valueB) * direction;
-  });
-});
-
-const handleCourseSort = ({ key, order }) => {
-  courseSort.value = { key, order };
-};
-
-const courseTableRowClass = ({ rowIndex }) => (
-  rowIndex % 2 === 1 ? 'course-table-row--striped' : ''
-);
-
 // 选课方案模板
 const planTemplates = ref([
   // { week: 周数, periodType: 规格(0,1,2), days: [星期几], excludeEarlyPeriods: 是否排除早八, excludeLatePeriods: 是否排除晚课, maxCourses: 数量 }
@@ -530,84 +319,30 @@ const planTemplates = ref([
   { week: 11, periodType: 0, days: [5], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 3 },
 ]);
 
-// --- 辅助函数 (数据预处理) ---
-
-// 提取周数: {7周} -> 7
-const parseWeek = (sksj) => {
-  const match = sksj.match(/\{(\d+)周\}/);
-  return match ? parseInt(match[1], 10) : null;
+const invalidateGeneratedPlans = (
+  message = '筛选条件或方案模板已修改，请重新生成选课方案。',
+) => {
+  generatedPlans.value = [];
+  activePlanNames.value = [];
+  resultsEmptyMessage.value = message;
 };
 
-// 提取天: 星期一 -> 1
-const parseDay = (sksj) => {
-  for (const [key, value] of Object.entries(dayMapReverse)) {
-    if (sksj.includes(key)) {
-      return value;
-    }
-  }
-  return null;
-};
-
-// 提取开始节: 第1-2节 -> 1
-const parseStartPeriod = (sksj) => {
-  const match = sksj.match(/第(\d+)-\d+节/);
-  return match ? parseInt(match[1], 10) : null;
-};
-
-// 提取结束节: 第1-2节 -> 2
-const parseEndPeriod = (sksj) => {
-  const match = sksj.match(/第\d+-(\d+)节/);
-  return match ? parseInt(match[1], 10) : null;
-};
-
-// 预处理所有课程
-const preprocessCourses = (courses) => {
-  return courses
-    .map((course, index) => {
-      const jxbrl = parseInt(course.jxbrl, 10);
-      const yxrs = parseInt(course.yxrs, 10);
-      const week = parseWeek(course.sksj);
-      const day = parseDay(course.sksj);
-      const startPeriod = parseStartPeriod(course.sksj);
-      const endPeriod = parseEndPeriod(course.sksj);
-
-      // 只有所有时间信息都解析成功才认为是有效课程
-      if (week === null || day === null || startPeriod === null || endPeriod === null || isNaN(jxbrl) || isNaN(yxrs)) {
-        return null;
-      }
-      
-      const ratio = (jxbrl > 0) ? (yxrs / jxbrl) : (yxrs > 0 ? 999 : 0); // 避免除以0
-
-      return {
-        ...course,
-        virtualRowKey: course.jxb_id || `${course.kcmc}-${course.sksj}-${index}`,
-        jxbrl, // 确保是数字
-        yxrs,  // 确保是数字
-        display: {
-          teacherName: getTeacherDisplayName(course.jsxx),
-          selectedCapacity: `${yxrs}/${jxbrl}`,
-          ratio: (ratio || 0).toFixed(2),
-          day: dayMap[day],
-          period: `${startPeriod}-${endPeriod}`,
-        },
-        parsed: {
-          week,
-          day,
-          startPeriod,
-          endPeriod,
-          ratio,
-        }
-      };
-    })
-    .filter(course => course !== null); // 过滤掉解析失败的课程
-};
+watch(filters, () => invalidateGeneratedPlans(), { deep: true });
+watch(planTemplates, () => invalidateGeneratedPlans(), { deep: true });
 
 // --- 核心逻辑 (方案生成) ---
 
 // 生成方案的主函数
 const generatePlans = () => {
-  generatedPlans.value = [];
-  const baseCourses = filteredCourses.value; 
+  const validationError = validatePlanConfiguration(filters, planTemplates.value);
+  if (validationError) {
+    ElMessage.warning(validationError);
+    activeTab.value = 'config';
+    return;
+  }
+
+  invalidateGeneratedPlans();
+  const baseCourses = filteredCourses.value;
   
   if (baseCourses.length === 0) {
     ElMessage.warning('没有满足基本筛选条件的课程，无法生成方案。');
@@ -615,9 +350,11 @@ const generatePlans = () => {
   }
   
   const plans = [];
-  for (const template of planTemplates.value) {
+  const emptyTemplateNumbers = [];
+  const underfilledTemplates = [];
+  for (const [templateIndex, template] of planTemplates.value.entries()) {
     // 步骤 4.1: 根据模板筛选课程
-    let templateFiltered = baseCourses.filter(c => {
+    const templateFiltered = baseCourses.filter(c => {
       // 匹配周
       if (c.parsed.week !== template.week) return false;
       // 匹配天
@@ -633,6 +370,14 @@ const generatePlans = () => {
     // 步骤 4.2: 精确搜索。先最大化课程门数，再最大化预计联合成功概率。
     const optimalPlan = findOptimalCoursePlan(templateFiltered, template.maxCourses);
     const selectedCourses = optimalPlan.courses;
+
+    if (selectedCourses.length === 0) {
+      emptyTemplateNumbers.push(templateIndex + 1);
+    } else if (selectedCourses.length < template.maxCourses) {
+      underfilledTemplates.push(
+        `${templateIndex + 1}（${selectedCourses.length}/${template.maxCourses} 门）`,
+      );
+    }
     
     // 步骤 4.4: 排序并保存方案
     selectedCourses.sort((a, b) => {
@@ -647,70 +392,95 @@ const generatePlans = () => {
     });
   }
 
-  generatedPlans.value = plans;
-  
-  ElMessage.success(`成功生成 ${plans.length} 个选课方案！`);
-  activeTab.value = 'results'; // 切换到结果标签页
-  activePlanNames.value = plans.map((_, i) => i); // 默认展开所有
-};
-
-// --- 【修改】: 文件处理 ---
-
-// 【新增】: 触发原生 input 点击的函数
-const triggerFileInput = () => {
-  fileInput.value.click();
-};
-
-// 【修改】: 将 handleFileChange 的逻辑迁移到新函数，并改为接收原生事件
-const handleFileSelected = (event) => {
-  const file = event.target.files[0]; // 从原生事件获取文件
-  if (!file) {
-    return; // 用户点击了取消
-  }
-
-  if (!file.type.includes('json') && !file.name.endsWith('.json')) {
-    ElMessage.warning('请选择一个.json文件');
+  if (emptyTemplateNumbers.length === plans.length) {
+    resultsEmptyMessage.value = '当前配置无法生成方案，请调整筛选条件或模板。';
+    ElMessage.warning('所有方案模板都没有可选课程，请调整筛选条件或模板。');
     return;
   }
 
-  loading.value = true; // 显示加载动画
+  generatedPlans.value = plans;
+  resultsEmptyMessage.value = '';
+
+  const generationNotices = [];
+  if (emptyTemplateNumbers.length > 0) {
+    generationNotices.push(`模板 ${emptyTemplateNumbers.join('、')} 没有可选课程`);
+  }
+  if (underfilledTemplates.length > 0) {
+    generationNotices.push(`模板 ${underfilledTemplates.join('、')} 未达到目标门数`);
+  }
+
+  if (generationNotices.length > 0) {
+    const validPlanCount = plans.length - emptyTemplateNumbers.length;
+    ElMessage.warning(`已处理 ${plans.length} 个模板，生成 ${validPlanCount} 个有效方案；${generationNotices.join('；')}。`);
+  } else {
+    ElMessage.success(`成功生成 ${plans.length} 个选课方案！`);
+  }
+  activeTab.value = 'results'; // 切换到结果标签页
+  activePlanNames.value = plans.map((_, i) => i); // 默认展开所有
+  nextTick(() => {
+    document.querySelector('.app-tabs [role="tab"][aria-selected="true"]')?.focus();
+  });
+};
+
+// --- 本地课程文件处理 ---
+const handleFileSelected = (event) => {
+  const file = event.target.files[0];
+  if (!file) {
+    return;
+  }
+
+  if (!file.type.includes('json') && !file.name.toLowerCase().endsWith('.json')) {
+    event.target.value = '';
+    ElMessage.warning('请选择一个 .json 文件');
+    return;
+  }
+
   const reader = new FileReader();
+  const loadId = beginCourseLoad({ fileReader: reader });
 
   reader.onload = (e) => {
     setTimeout(() => {
+      if (!isActiveCourseLoad(loadId)) return;
+
       try {
         const content = e.target.result;
         const data = JSON.parse(content);
+        const preparedData = prepareCourseData(data?.courses);
+        const hadGeneratedPlans = generatedPlans.value.length > 0;
+        jsonUpdateTime.value = data.update_time || '本地上传';
+        processedCourses.value = preparedData.courses;
+        courseLoadError.value = '';
+        invalidateGeneratedPlans(
+          hadGeneratedPlans
+            ? '课程数据已更换，原有方案已失效，请重新生成选课方案。'
+            : defaultResultsEmptyMessage,
+        );
+        activeTab.value = 'config';
 
-        if (data && data.courses) {
-          jsonUpdateTime.value = '本地上传';
-          processedCourses.value = preprocessCourses(data.courses);
-          
-          ElMessage.success('本地JSON文件加载成功！');
-          
-          generatedPlans.value = [];
-          activeTab.value = 'config';
-
-        } else {
-          throw new Error("JSON数据格式不正确, 缺少 'courses' 键。");
-        }
+        const ignoredText = preparedData.rejectedCount > 0
+          ? `，已忽略 ${preparedData.rejectedCount} 条无效记录`
+          : '';
+        ElMessage.success(`本地 JSON 文件加载成功${ignoredText}！`);
       } catch (error) {
+        if (!isActiveCourseLoad(loadId)) return;
         console.error(error);
-        ElMessage.error(`文件解析失败: ${error.message}`);
+        courseLoadError.value = `本地文件解析失败：${error.message}`;
+        ElMessage.error(courseLoadError.value);
       } finally {
-        loading.value = false; // 结束加载
+        finishCourseLoad(loadId);
       }
-    }, 0); 
+    }, 0);
   };
   
   reader.onerror = () => {
-      ElMessage.error('读取文件失败。');
-      loading.value = false;
-  }
+    if (!isActiveCourseLoad(loadId)) return;
+    courseLoadError.value = '读取本地文件失败';
+    ElMessage.error(courseLoadError.value);
+    finishCourseLoad(loadId);
+  };
 
   reader.readAsText(file, 'UTF-8');
-
-  event.target.value = null;
+  event.target.value = '';
 };
 
 
@@ -733,45 +503,50 @@ const removeTemplate = (index) => {
 
 // --- 生命周期函数 ---
 const fetchCourses = async (isManualRefresh = false) => {
+  const requestController = new AbortController();
+  const loadId = beginCourseLoad({ requestController });
+
   try {
-    loading.value = true;
-
-    const requestUrl = isManualRefresh
-      ? `${courseDataUrl}?t=${Date.now()}`
-      : courseDataUrl;
-    const response = await fetch(requestUrl, {
-      cache: isManualRefresh ? 'no-store' : 'default',
+    const data = await fetchCoursePayload({
+      url: courseDataUrl,
+      isManualRefresh,
+      signal: requestController.signal,
     });
+    if (!isActiveCourseLoad(loadId)) return;
 
-    if (!response.ok) {
-      throw new Error(`请求失败 (${response.status})`);
-    }
+    const preparedData = prepareCourseData(data.courses);
+    const hadGeneratedPlans = generatedPlans.value.length > 0;
+    jsonUpdateTime.value = data.update_time || '未知';
+    processedCourses.value = preparedData.courses;
+    invalidateGeneratedPlans(
+      hadGeneratedPlans
+        ? '课程数据已更新，原有方案已失效，请重新生成选课方案。'
+        : defaultResultsEmptyMessage,
+    );
+    activeTab.value = 'config';
 
-    const data = await response.json();
-    
-    if (data && data.courses) {
-      // 从网络获取时，正常显示更新时间
-      jsonUpdateTime.value = data.update_time || '未知';
-      processedCourses.value = preprocessCourses(data.courses);
-
-      if (isManualRefresh) {
-        ElMessage.success('课程数据已刷新！');
-      }
-      
-    } else {
-      throw new Error("JSON数据格式不正确");
+    if (isManualRefresh) {
+      const ignoredText = preparedData.rejectedCount > 0
+        ? `，已忽略 ${preparedData.rejectedCount} 条无效记录`
+        : '';
+      ElMessage.success(
+        hadGeneratedPlans
+          ? `课程数据已刷新${ignoredText}，原有方案已失效，请重新生成。`
+          : `课程数据已刷新${ignoredText}。`,
+      );
     }
   } catch (error) {
+    if (!isActiveCourseLoad(loadId) || error?.name === 'AbortError') return;
     console.error(error);
-    ElMessage.error(`加载课程数据失败: ${error.message}.`);
+    courseLoadError.value = formatCourseRequestError(error);
+    ElMessage.error(`加载课程数据失败：${courseLoadError.value}`);
   } finally {
-    loading.value = false;
+    finishCourseLoad(loadId);
   }
 };
 
 onMounted(async () => {
-  document.title = '个性化培养周选课工具';
-  await fetchCourses(false); // 页面加载时获取数据并应用筛选
+  await fetchCourses(false);
 });
 
 </script>
@@ -832,6 +607,7 @@ body {
 }
 
 .app-title {
+  margin: 0;
   font-size: 20px;
   font-weight: 650;
   letter-spacing: 0.03em;
@@ -981,103 +757,6 @@ body {
   margin: 0;
 }
 
-.course-overview-card > .el-card__body {
-  padding: 0 20px 20px;
-}
-
-.course-overview-card {
-  width: 100%;
-  min-width: 0;
-}
-
-.course-toolbar {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.course-toolbar-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.course-toolbar-title strong {
-  color: #0f172a;
-  font-size: 16px;
-}
-
-.course-toolbar-title small {
-  overflow: hidden;
-  color: #94a3b8;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.course-count {
-  padding: 3px 9px;
-  border-radius: 999px;
-  color: #1d4ed8;
-  background: #eff6ff;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.course-toolbar-actions {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 10px;
-}
-
-.result-empty {
-  padding: 72px 24px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 14px;
-  color: #64748b;
-  background: rgba(255, 255, 255, 0.78);
-  text-align: center;
-}
-
-.results-pane {
-  min-height: 320px;
-  padding: 20px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
-}
-
-.results-pane .el-collapse {
-  border-radius: 10px;
-}
-
-.results-pane .el-collapse-item__header {
-  min-width: 0;
-  height: auto;
-  min-height: 48px;
-  padding: 10px 8px;
-  align-items: flex-start;
-  line-height: 1.5;
-}
-
-.results-pane .el-collapse-item__title {
-  display: block;
-  min-width: 0;
-  padding-right: 12px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.results-pane .el-collapse-item__arrow {
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-
 .app-footer {
   height: auto;
   padding: 6px 16px 22px;
@@ -1095,62 +774,6 @@ body {
   max-width: 340px;
   line-height: 1.6;
 }
-.main-course-table {
-  height: 580px;
-  width: 100%;
-}
-.course-table-cell-text {
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.teacher-column-header {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.teacher-info-toggle {
-  cursor: pointer;
-}
-.course-table-row--striped {
-  background-color: #f8fafc;
-}
-.main-course-table .el-table-v2__empty {
-  display: flex;
-  height: calc(100% - 50px);
-  align-items: center;
-  justify-content: center;
-}
-.course-table-empty {
-  width: min(420px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 24px 20px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #f8fafc, #fff);
-}
-.course-table-empty .el-empty__image {
-  opacity: 0.8;
-}
-.course-table-empty .el-empty__description {
-  margin-top: 14px;
-}
-.course-table-empty-title {
-  margin: 0;
-  color: var(--el-text-color-primary);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.course-table-empty-hint {
-  margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 @media (max-width: 767px) {
   .app-header {
     height: 64px;
@@ -1201,35 +824,8 @@ body {
     padding: 14px;
   }
 
-  .main-course-table {
-    height: 430px;
-  }
-
-  /* 修复表格在移动端显示不全的问题，允许横向滚动 */
-  .plan-result-table .el-table__body-wrapper {
-    overflow-x: auto;
-  }
-
-  .course-overview-card > .el-card__body {
-    padding: 0 12px 12px;
-  }
-
-  .course-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .course-toolbar-title {
-    width: 100%;
-  }
-
-  .course-toolbar-title small {
-    margin-left: auto;
-  }
-
-  .course-toolbar-actions {
-    width: 100%;
-    justify-content: flex-end;
+  .plan-template .el-checkbox-group {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .responsive-checkbox-group {
@@ -1245,14 +841,5 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .results-pane {
-    min-height: 260px;
-    padding: 12px;
-    border-radius: 12px;
-  }
-
-  .result-empty {
-    padding: 52px 16px;
-  }
 }
 </style>

@@ -4,8 +4,12 @@
       {{ emptyMessage }}
     </div>
 
+    <p v-if="plans.length > 0" class="probability-note">
+      成功率为等概率随机筛选、各课程结果近似独立时的估算，依据当前课程数据计算，不代表实际录取结果。
+    </p>
+
     <el-collapse
-      v-else
+      v-if="plans.length > 0"
       :model-value="activePlanNames"
       @update:model-value="updateActivePlanNames"
     >
@@ -27,7 +31,7 @@
         </p>
 
         <el-table
-          v-else
+          v-else-if="!isMobile"
           :data="plan.courses"
           stripe
           border
@@ -50,7 +54,7 @@
           </el-table-column>
         </el-table>
 
-        <div v-if="plan.courses.length > 0" class="mobile-course-list">
+        <div v-if="isMobile && plan.courses.length > 0" class="mobile-course-list">
           <article
             v-for="(course, courseIndex) in plan.courses"
             :key="course.virtualRowKey ?? course.jxb_id ?? `${planIndex}-${courseIndex}`"
@@ -91,6 +95,14 @@
 </template>
 
 <script setup>
+import { onMounted, onUnmounted, ref } from 'vue';
+
+const mobileQuery = window.matchMedia('(max-width: 767px)');
+const isMobile = ref(mobileQuery.matches);
+const updateLayout = (event) => { isMobile.value = event.matches; };
+onMounted(() => mobileQuery.addEventListener('change', updateLayout));
+onUnmounted(() => mobileQuery.removeEventListener('change', updateLayout));
+
 defineProps({
   plans: {
     type: Array,
@@ -216,8 +228,11 @@ const formatRatio = (course) => {
   text-align: center;
 }
 
-.mobile-course-list {
-  display: none;
+.probability-note {
+  margin: 0 0 16px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 :deep(.el-collapse) {
@@ -251,10 +266,6 @@ const formatRatio = (course) => {
 
   .result-empty {
     padding: 52px 16px;
-  }
-
-  .desktop-plan-table {
-    display: none;
   }
 
   .mobile-course-list {

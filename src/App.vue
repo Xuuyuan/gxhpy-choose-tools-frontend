@@ -168,6 +168,11 @@
                     </el-form-item>
                   </el-form>
                 </div>
+                <details class="probability-help">
+                  <summary>成功率如何估算</summary>
+                  <p>先尽量满足目标门数，再选择估算全选成功率最高的组合；成功率相同时优先总报录比更低、总容量更大的组合。</p>
+                  <p>假设第一轮等概率随机筛选、已选人数尚未包含你，单门成功率为“容量 ÷（已选人数 + 1）”，最高为 100%；全选成功率按各门结果近似独立，将单门成功率相乘。</p>
+                </details>
                 <div class="template-actions">
                   <el-button @click="addTemplate" :icon="Plus" plain>添加模板</el-button>
                   <el-button type="primary" @click="generatePlans" :disabled="loading" :icon="Promotion">
@@ -184,6 +189,7 @@
                 :update-time="jsonUpdateTime"
                 :loading="loading"
                 :load-error="courseLoadError"
+                :rejected-count="rejectedCourseCount"
                 @file-selected="handleFileSelected"
                 @refresh="fetchCourses(true)"
               />
@@ -232,6 +238,7 @@ const loading = ref(true);
 const activeTab = ref('config');
 const jsonUpdateTime = ref(''); // 存储更新时间
 const courseLoadError = ref('');
+const rejectedCourseCount = ref(0);
 const processedCourses = shallowRef([]); // 经过预处理的课程数据
 const generatedPlans = shallowRef([]); // 生成的方案
 const activePlanNames = ref([]);
@@ -441,6 +448,7 @@ const handleFileSelected = (event) => {
         const hadGeneratedPlans = generatedPlans.value.length > 0;
         jsonUpdateTime.value = data.update_time || '本地上传';
         processedCourses.value = preparedData.courses;
+        rejectedCourseCount.value = preparedData.rejectedCount;
         courseLoadError.value = '';
         invalidateGeneratedPlans(
           hadGeneratedPlans
@@ -500,6 +508,7 @@ const fetchCourses = async (isManualRefresh = false) => {
     if (!isActiveCourseLoad(loadId)) return;
 
     const preparedData = prepareCourseData(data.courses);
+    rejectedCourseCount.value = preparedData.rejectedCount;
     const hasChanges = !areCourseListsEquivalent(processedCourses.value, preparedData.courses);
     const hadGeneratedPlans = generatedPlans.value.length > 0;
     jsonUpdateTime.value = data.update_time || '未知';
@@ -734,6 +743,15 @@ body {
   width: auto;
   margin-right: 0;
 }
+
+.probability-help {
+  margin-bottom: 14px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.probability-help summary { cursor: pointer; }
+.probability-help p { margin: 8px 0; }
 
 .preferences-toolbar {
   display: flex;

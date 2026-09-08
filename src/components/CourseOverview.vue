@@ -62,6 +62,16 @@
       :closable="false"
     />
 
+    <el-alert
+      v-if="rejectedCount > 0"
+      class="course-load-alert"
+      :title="`当前数据已忽略 ${rejectedCount} 条无效课程记录`"
+      description="这些记录的上课时间或人数等字段无法识别，未参与筛选和方案生成。"
+      type="warning"
+      show-icon
+      :closable="false"
+    />
+
     <div class="main-course-table" v-loading="loading" element-loading-text="正在加载课程数据..." :aria-busy="loading">
       <el-auto-resizer>
         <template #default="{ height, width }">
@@ -137,6 +147,10 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false,
+  },
+  rejectedCount: {
+    type: Number,
+    default: 0,
   },
   loadError: {
     type: String,

@@ -62,7 +62,7 @@
       :closable="false"
     />
 
-    <div class="main-course-table">
+    <div class="main-course-table" v-loading="loading" element-loading-text="正在加载课程数据..." :aria-busy="loading">
       <el-auto-resizer>
         <template #default="{ height, width }">
           <el-table-v2

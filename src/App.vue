@@ -10,10 +10,7 @@
     </el-header>
 
     <el-main
-      v-loading="loading"
-      element-loading-text="正在加载课程数据..."
       class="app-main"
-      :aria-busy="loading"
     >
       <el-tabs v-model="activeTab" class="app-tabs">
         
@@ -82,7 +79,7 @@
                     </el-col>
                   </el-row>
 
-                  <el-form-item label="[排除] 特定地点 (英文逗号分隔)">
+                  <el-form-item label="[排除] 特定地点 (中英文逗号分隔)">
                     <template #label>
                       <el-tooltip
                         content="排除特定地点可以避免选取到室外或特殊教学楼课程"
@@ -90,13 +87,14 @@
                         :show-after="200"
                         popper-class="filter-tooltip"
                       >
-                        <span class="filter-label-with-tooltip" tabindex="0">[排除] 特定地点 (英文逗号分隔)</span>
+                        <span class="filter-label-with-tooltip" tabindex="0">[排除] 特定地点 (中英文逗号分隔)</span>
                       </el-tooltip>
                     </template>
                     <el-input v-model="filters.excludeOutdoorPrefix" placeholder="个性周-室外,东区,健美操馆" />
+                    <small class="filter-recognized">已识别地点前缀：{{ excludedLocations.join("、") || "无" }}</small>
                   </el-form-item>
 
-                  <el-form-item label="[排除] 特定课程名称 (英文逗号分隔)">
+                  <el-form-item label="[排除] 特定课程名称 (中英文逗号分隔)">
                     <template #label>
                       <el-tooltip
                         content="排除特定课程名称为备选项，用于避免抓取的课程列表含面向特定学院的开课而导致无法正常选课问题"
@@ -104,7 +102,7 @@
                         :show-after="200"
                         popper-class="filter-tooltip"
                       >
-                        <span class="filter-label-with-tooltip" tabindex="0">[排除] 特定课程名称 (英文逗号分隔)</span>
+                        <span class="filter-label-with-tooltip" tabindex="0">[排除] 特定课程名称 (中英文逗号分隔)</span>
                       </el-tooltip>
                     </template>
                     <el-input
@@ -112,6 +110,7 @@
                       placeholder="课程名称A,课程名称B"
                       clearable
                     />
+                    <small class="filter-recognized">已识别课程名称：{{ excludedNames.join("、") || "无" }}</small>
                   </el-form-item>
                 </el-form>
               </el-card>
@@ -167,7 +166,7 @@
                 </div>
                 <div class="template-actions">
                   <el-button @click="addTemplate" :icon="Plus" plain>添加模板</el-button>
-                  <el-button type="primary" @click="generatePlans" :icon="Promotion">
+                  <el-button type="primary" @click="generatePlans" :disabled="loading" :icon="Promotion">
                     生成选课方案
                   </el-button>
                 </div>
@@ -212,7 +211,7 @@ import 'element-plus/es/components/message/style/css';
 import { Delete, Plus, Promotion } from '@element-plus/icons-vue';
 import CourseOverview from './components/CourseOverview.vue';
 import PlanResults from './components/PlanResults.vue';
-import { dayMap, prepareCourseData } from './courseData.js';
+import { dayMap, prepareCourseData, parseExclusionTerms, areCourseListsEquivalent } from './courseData.js';
 import {
   findOptimalCoursePlan,
   matchesPeriodType,
@@ -275,14 +274,11 @@ const filters = reactive({
 });
 
 const cangshanPrefixes = ['文', '综', '田'];
+const excludedLocations = computed(() => parseExclusionTerms(filters.excludeOutdoorPrefix));
+const excludedNames = computed(() => parseExclusionTerms(filters.excludeCourseNames));
 const filteredCourses = computed(() => {
-  const excludeOutdoor = filters.excludeOutdoorPrefix.split(',').filter(Boolean);
-  const excludedCourseNames = new Set(
-    filters.excludeCourseNames
-      .split(',')
-      .map(courseName => courseName.trim())
-      .filter(Boolean),
-  );
+  const excludeOutdoor = excludedLocations.value;
+  const excludedCourseNames = new Set(excludedNames.value);
   const showQishan = filters.selectedCampuses.includes('旗山校区');
   const showCangshan = filters.selectedCampuses.includes('仓山校区');
 
@@ -334,6 +330,7 @@ watch(planTemplates, () => invalidateGeneratedPlans(), { deep: true });
 
 // 生成方案的主函数
 const generatePlans = () => {
+  if (loading.value) return;
   const validationError = validatePlanConfiguration(filters, planTemplates.value);
   if (validationError) {
     ElMessage.warning(validationError);
@@ -515,24 +512,28 @@ const fetchCourses = async (isManualRefresh = false) => {
     if (!isActiveCourseLoad(loadId)) return;
 
     const preparedData = prepareCourseData(data.courses);
+    const hasChanges = !areCourseListsEquivalent(processedCourses.value, preparedData.courses);
     const hadGeneratedPlans = generatedPlans.value.length > 0;
     jsonUpdateTime.value = data.update_time || '未知';
-    processedCourses.value = preparedData.courses;
-    invalidateGeneratedPlans(
-      hadGeneratedPlans
-        ? '课程数据已更新，原有方案已失效，请重新生成选课方案。'
-        : defaultResultsEmptyMessage,
-    );
-    activeTab.value = 'config';
+    if (hasChanges) {
+      processedCourses.value = preparedData.courses;
+      invalidateGeneratedPlans(
+        hadGeneratedPlans
+          ? '课程数据已更新，原有方案已失效，请重新生成选课方案。'
+          : defaultResultsEmptyMessage,
+      );
+    }
 
     if (isManualRefresh) {
       const ignoredText = preparedData.rejectedCount > 0
         ? `，已忽略 ${preparedData.rejectedCount} 条无效记录`
         : '';
       ElMessage.success(
-        hadGeneratedPlans
-          ? `课程数据已刷新${ignoredText}，原有方案已失效，请重新生成。`
-          : `课程数据已刷新${ignoredText}。`,
+        !hasChanges
+          ? `课程数据无变化${ignoredText}，已保留当前方案。`
+          : hadGeneratedPlans
+            ? `课程数据已刷新${ignoredText}，原有方案已失效，请重新生成。`
+            : `课程数据已刷新${ignoredText}。`,
       );
     }
   } catch (error) {
@@ -769,6 +770,11 @@ body {
   cursor: help;
   text-decoration: underline dotted var(--el-text-color-placeholder);
   text-underline-offset: 3px;
+}
+.filter-recognized {
+  color: #64748b;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 .filter-tooltip {
   max-width: 340px;

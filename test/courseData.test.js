@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   getTeacherDisplayName,
+  parseExclusionTerms,
+  areCourseListsEquivalent,
   prepareCourseData,
   preprocessCourses,
 } from '../src/courseData.js';
@@ -121,4 +123,19 @@ test('课程名称与地点会规范化为可筛选的字符串', () => {
 
   assert.equal(course.kcmc, '123');
   assert.equal(course.jxdd, '456');
+});
+
+test('排除条件支持中英文逗号、空格与去重', () => {
+  assert.deepEqual(parseExclusionTerms(' 东区，室外, 东区,， '), ['东区', '室外']);
+  assert.deepEqual(parseExclusionTerms(''), []);
+});
+
+test('相同课程的重排和无关元数据不会使方案失效', () => {
+  const courses = preprocessCourses([createCourse(), createCourse({ kcmc: '另一门' })]);
+  assert.equal(areCourseListsEquivalent(courses, [...courses].reverse().map(c => ({ ...c, fetchedAt: 1 }))), true);
+  for (const change of [{ yxrs: 31 }, { jxbrl: 121 }, { jxdd: '东区' }, { sksj: '{11周}星期五第5-6节' }, { kcmc: '新名称' }, { jsxx: '新教师' }, { jxb_id: 'new-id' }]) {
+    assert.equal(areCourseListsEquivalent(courses, [{ ...courses[0], ...change }, courses[1]]), false);
+  }
+  assert.equal(areCourseListsEquivalent(courses, courses.slice(1)), false);
+  assert.equal(areCourseListsEquivalent(courses, [courses[0], courses[0]]), false);
 });

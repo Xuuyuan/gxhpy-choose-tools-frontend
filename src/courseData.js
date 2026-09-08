@@ -128,3 +128,19 @@ export const prepareCourseData = (courses) => {
     rejectedCount: courses.length - processedCourses.length,
   };
 };
+
+// 输入框支持中英文逗号，忽略空白和重复条件。
+export const parseExclusionTerms = value => (
+  [...new Set(String(value ?? '').split(/[,，]/).map(term => term.trim()).filter(Boolean))]
+);
+
+// 忽略接口记录顺序和无关元数据，保留影响筛选、求解和结果展示的字段。
+export const areCourseListsEquivalent = (previous, next) => {
+  if (previous.length !== next.length) return false;
+  const signatures = courses => courses.map(course => JSON.stringify([
+    course.jxb_id ?? null, course.kcmc, course.jsxx ?? '', course.sksj,
+    course.jxdd, course.jxbrl, course.yxrs,
+  ])).sort();
+  const previousSignatures = signatures(previous);
+  return signatures(next).every((signature, index) => signature === previousSignatures[index]);
+};

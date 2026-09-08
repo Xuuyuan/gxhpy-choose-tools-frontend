@@ -101,11 +101,22 @@
         </template>
       </el-auto-resizer>
     </div>
+    <el-dialog v-model="detailsVisible" title="课程详情" class="course-detail-dialog" width="min(560px, calc(100vw - 32px))" destroy-on-close>
+      <dl v-if="selectedCourse" class="course-full-details">
+        <div><dt>课程名称</dt><dd>{{ selectedCourse.kcmc || '暂无' }}</dd></div>
+        <div><dt>教师信息</dt><dd>{{ selectedCourse.jsxx || '暂无' }}</dd></div>
+        <div><dt>上课时间</dt><dd>{{ selectedCourse.sksj || '暂无' }}</dd></div>
+        <div><dt>上课地点</dt><dd>{{ selectedCourse.jxdd || '暂无' }}</dd></div>
+        <div><dt>已选/容量</dt><dd>{{ selectedCourse.display.selectedCapacity }}</dd></div>
+        <div><dt>报录比</dt><dd>{{ selectedCourse.display.ratio }}</dd></div>
+      </dl>
+      <template #footer><el-button @click="detailsVisible = false">关闭</el-button></template>
+    </el-dialog>
   </el-card>
 </template>
 
 <script setup>
-import { computed, h, ref } from 'vue';
+import { computed, h, ref, shallowRef, watch } from 'vue';
 import { ElIcon, TableV2SortOrder } from 'element-plus';
 import 'element-plus/es/components/icon/style/css';
 import { Download, Hide, Refresh, Upload, View } from '@element-plus/icons-vue';
@@ -136,6 +147,16 @@ const props = defineProps({
 const emit = defineEmits(['file-selected', 'refresh']);
 
 const fileInput = ref(null);
+const selectedCourse = shallowRef(null);
+const detailsVisible = ref(false);
+const openCourseDetails = (course) => {
+  selectedCourse.value = course;
+  detailsVisible.value = true;
+};
+watch(() => props.courses, () => {
+  detailsVisible.value = false;
+  selectedCourse.value = null;
+});
 const showFullTeacherInfo = ref(false);
 const courseSort = ref({
   key: 'ratio',
@@ -177,7 +198,11 @@ const courseTableColumns = computed(() => {
     dataKey: 'kcmc',
     title: '课程名称',
     width: 80,
-    cellRenderer: ({ rowData }) => renderTextCell(rowData.kcmc),
+    cellRenderer: ({ rowData }) => h('button', {
+      type: 'button', class: 'course-table-cell-text course-detail-link',
+      title: rowData.kcmc, 'aria-label': `查看课程详情：${rowData.kcmc || '未命名课程'}`,
+      onClick: () => openCourseDetails(rowData),
+    }, rowData.kcmc || '未命名课程'),
   },
   {
     key: 'jsxx',
@@ -317,6 +342,24 @@ const handleFileSelected = (event) => {
 </script>
 
 <style>
+.course-detail-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--el-color-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.course-detail-link:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
+}
+.course-full-details { margin: 0; }
+.course-full-details > div { margin-bottom: 16px; }
+.course-full-details dt { color: #64748b; margin-bottom: 4px; }
+.course-full-details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
 .course-overview-card > .el-card__body {
   padding: 0 20px 20px;
 }

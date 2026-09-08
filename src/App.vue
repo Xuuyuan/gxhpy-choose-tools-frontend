@@ -116,6 +116,10 @@
               </el-card>
 
               <el-card header="2. 选课方案模板" class="panel-card template-card">
+                <div class="preferences-toolbar">
+                  <small role="status">{{ preferencesError || '筛选与模板配置自动保存在本机' }}</small>
+                  <el-button text size="small" @click="resetPreferences">恢复默认</el-button>
+                </div>
                 <div
                   v-for="(template, index) in planTemplates"
                   :key="index"
@@ -220,6 +224,7 @@ import {
 } from './coursePlanner.js';
 import { fetchCoursePayload, formatCourseRequestError } from './courseService.js';
 import { validatePlanConfiguration } from './planConfiguration.js';
+import { createDefaultPreferences, createAdditionalTemplate, loadPlannerPreferences, savePlannerPreferences } from './plannerPreferences.js';
 
 // --- 状态定义 ---
 
@@ -264,14 +269,9 @@ const finishCourseLoad = (loadId) => {
   loading.value = false;
 };
 
-const filters = reactive({
-  minRatio: 0.3,
-  maxRatio: 10, // 报录比上限
-  minCapacity: 90,
-  selectedCampuses: ['旗山校区'], // 默认全选
-  excludeOutdoorPrefix: '个性周-室外,东区,健美操馆',
-  excludeCourseNames: '',
-});
+const restoredPreferences = loadPlannerPreferences();
+const preferencesError = ref(restoredPreferences.error);
+const filters = reactive(restoredPreferences.preferences.filters);
 
 const cangshanPrefixes = ['文', '综', '田'];
 const excludedLocations = computed(() => parseExclusionTerms(filters.excludeOutdoorPrefix));
@@ -298,22 +298,17 @@ const filteredCourses = computed(() => {
   });
 });
 
-// 选课方案模板
-const planTemplates = ref([
-  // { week: 周数, periodType: 规格(0,1,2), days: [星期几], excludeEarlyPeriods: 是否排除早八, excludeLatePeriods: 是否排除晚课, maxCourses: 数量 }
-  
-  // 第一阶段（校级-第一轮）默认方案
-  // { week: 10, periodType: 1, days: [1], maxCourses: 4 },
-  // { week: 10, periodType: 2, days: [3], maxCourses: 4 },
+const planTemplates = ref(restoredPreferences.preferences.templates);
 
-  // 第二阶段（校级-第二轮）默认方案
-  // { week: 10, periodType: 2, days: [4], maxCourses: 2 },
-  // { week: 10, periodType: 2, days: [5], maxCourses: 2 },
+const resetPreferences = () => {
+  const defaults = createDefaultPreferences();
+  Object.assign(filters, defaults.filters);
+  planTemplates.value = defaults.templates;
+};
 
-  // 第三阶段（院级-第三轮）默认方案
-  { week: 11, periodType: 0, days: [1], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 3 },
-  { week: 11, periodType: 0, days: [5], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 3 },
-]);
+watch([filters, planTemplates], () => {
+  preferencesError.value = savePlannerPreferences({ filters, templates: planTemplates.value });
+}, { deep: true });
 
 const invalidateGeneratedPlans = (
   message = '筛选条件或方案模板已修改，请重新生成选课方案。',
@@ -483,14 +478,7 @@ const handleFileSelected = (event) => {
 
 // --- 模板配置UI ---
 const addTemplate = () => {
-  planTemplates.value.push({
-    week: 7,
-    periodType: 0,
-    days: [1, 2, 3, 4, 5],
-    excludeEarlyPeriods: false,
-    excludeLatePeriods: false,
-    maxCourses: 8
-  });
+  planTemplates.value.push(createAdditionalTemplate(planTemplates.value));
 };
 
 const removeTemplate = (index) => {
@@ -745,6 +733,15 @@ body {
 .plan-template .el-checkbox-group .el-checkbox {
   width: auto;
   margin-right: 0;
+}
+
+.preferences-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #64748b;
 }
 
 .template-actions {

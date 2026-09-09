@@ -4,6 +4,7 @@ export const createDefaultPreferences = () => ({
   filters: {
     minRatio: 0.3,
     maxRatio: 10,
+    excludeFullCourses: false,
     minCapacity: 90,
     selectedCampuses: ['旗山校区'],
     excludeOutdoorPrefix: '个性周-室外,东区,健美操馆',
@@ -30,6 +31,7 @@ const normalizePreferences = (value) => {
     || filters.selectedCampuses.some(campus => !['旗山校区', '仓山校区'].includes(campus))
     || typeof filters.excludeOutdoorPrefix !== 'string'
     || typeof filters.excludeCourseNames !== 'string'
+    || (filters.excludeFullCourses !== undefined && typeof filters.excludeFullCourses !== 'boolean')
     || !Array.isArray(templates)
     || templates.some(template => !template
       || !isDraftNumber(template.week, 1, 20, true)
@@ -43,7 +45,10 @@ const normalizePreferences = (value) => {
   }
   return {
     filters: {
-      minRatio: filters.minRatio, maxRatio: filters.maxRatio, minCapacity: filters.minCapacity,
+      minRatio: filters.minRatio,
+      maxRatio: filters.excludeFullCourses ? 0.9999 : filters.maxRatio,
+      excludeFullCourses: filters.excludeFullCourses ?? false,
+      minCapacity: filters.minCapacity,
       selectedCampuses: [...filters.selectedCampuses],
       excludeOutdoorPrefix: filters.excludeOutdoorPrefix, excludeCourseNames: filters.excludeCourseNames,
     },

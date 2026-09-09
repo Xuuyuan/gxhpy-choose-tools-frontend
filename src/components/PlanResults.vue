@@ -4,10 +4,6 @@
       {{ emptyMessage }}
     </div>
 
-    <p v-if="plans.length > 0" class="probability-note">
-      成功率为等概率随机筛选、各课程结果近似独立时的估算，依据当前课程数据计算，不代表实际录取结果。
-    </p>
-
     <el-collapse
       v-if="plans.length > 0"
       :model-value="activePlanNames"
@@ -226,13 +222,6 @@ const formatRatio = (course) => {
   color: #64748b;
   background: #f8fafc;
   text-align: center;
-}
-
-.probability-note {
-  margin: 0 0 16px;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 :deep(.el-collapse) {

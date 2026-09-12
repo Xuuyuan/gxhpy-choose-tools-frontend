@@ -251,6 +251,7 @@ const formatRatio = (course) => {
     min-height: 260px;
     padding: 12px;
     border-radius: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
   .result-empty {
@@ -271,6 +272,13 @@ const formatRatio = (course) => {
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     background: #f8fafc;
+    touch-action: manipulation;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+
+  .course-card:active {
+    border-color: #93c5fd;
+    background: #eff6ff;
   }
 
   .course-card-header {

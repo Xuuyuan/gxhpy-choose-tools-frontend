@@ -73,6 +73,32 @@
     />
 
     <div class="main-course-table" v-loading="loading" element-loading-text="正在加载课程数据..." :aria-busy="loading">
+      <div class="mobile-course-list" aria-label="课程总览">
+        <template v-if="sortedFilteredCourses.length">
+          <button
+            v-for="course in sortedFilteredCourses"
+            :key="course.virtualRowKey"
+            type="button"
+            class="mobile-course-card"
+            @click="openCourseDetails(course)"
+          >
+            <span class="mobile-course-card__title">{{ course.kcmc || '未命名课程' }}</span>
+            <span class="mobile-course-card__meta">{{ course.display.teacherName || '教师信息暂无' }} · {{ course.sksj || '时间暂无' }}</span>
+            <span class="mobile-course-card__meta">{{ course.jxdd || '地点暂无' }} · {{ course.display.day }} · {{ course.display.period }}</span>
+            <span class="mobile-course-card__stats">
+              <span>已选/容量 {{ course.display.selectedCapacity }}</span>
+              <span>报录比 {{ course.display.ratio }}</span>
+            </span>
+          </button>
+        </template>
+        <el-empty v-else :image-size="72" class="course-table-empty">
+          <template #description>
+            <p class="course-table-empty-title">{{ courses.length === 0 ? '暂未获取到课程列表' : '没有符合筛选条件的课程' }}</p>
+            <p class="course-table-empty-hint">{{ courses.length === 0 ? '请点击右上角刷新，或上传本地 JSON 文件' : '请尝试调整筛选条件' }}</p>
+          </template>
+        </el-empty>
+      </div>
+      <div class="desktop-course-table">
       <el-auto-resizer>
         <template #default="{ height, width }">
           <el-table-v2
@@ -110,6 +136,7 @@
           </el-table-v2>
         </template>
       </el-auto-resizer>
+      </div>
     </div>
     <el-dialog v-model="detailsVisible" title="课程详情" class="course-detail-dialog" width="min(560px, calc(100vw - 32px))" destroy-on-close>
       <dl v-if="selectedCourse" class="course-full-details">
@@ -445,6 +472,8 @@ const handleFileSelected = (event) => {
   height: 580px;
 }
 
+.mobile-course-list { display: none; }
+
 .course-table-cell-text {
   display: block;
   width: 100%;
@@ -551,7 +580,45 @@ const handleFileSelected = (event) => {
   }
 
   .main-course-table {
-    height: 430px;
+    height: auto;
+    min-height: 120px;
   }
+
+  .desktop-course-table { display: none; }
+
+  .mobile-course-list {
+    display: flex;
+    max-height: 62vh;
+    min-height: 120px;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .mobile-course-card {
+    display: flex;
+    width: 100%;
+    min-height: 112px;
+    padding: 13px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+    color: inherit;
+    background: #fff;
+    text-align: left;
+    box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .mobile-course-card:active { background: #eff6ff; }
+  .mobile-course-card__title { color: #1d4ed8; font-size: 15px; font-weight: 650; }
+  .mobile-course-card__meta { width: 100%; overflow: hidden; color: #64748b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-course-card__stats { display: flex; width: 100%; margin-top: auto; justify-content: space-between; color: #334155; font-size: 12px; }
 }
 </style>

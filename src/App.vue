@@ -811,8 +811,12 @@ body {
   }
 
   .app-tabs > .el-tabs__header {
+    position: sticky;
+    z-index: 10;
+    top: 0;
     margin-bottom: 14px;
     padding: 0 8px;
+    background: rgb(255 255 255 / 96%);
   }
 
   .app-tabs .el-tabs__item {
@@ -829,6 +833,23 @@ body {
   .panel-card > .el-card__header,
   .panel-card > .el-card__body {
     padding: 16px;
+  }
+
+  .filter-card .el-input,
+  .filter-card .el-input-number,
+  .filter-card .el-select,
+  .filter-card .el-button,
+  .filter-card .el-checkbox {
+    min-height: 44px;
+  }
+
+  .filter-card .el-input-number,
+  .filter-card .el-input-number .el-input__wrapper {
+    min-height: 44px;
+  }
+
+  .filter-card .el-form-item {
+    margin-bottom: 14px;
   }
 
   .plan-template {

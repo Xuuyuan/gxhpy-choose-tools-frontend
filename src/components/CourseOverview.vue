@@ -80,7 +80,11 @@
             :key="course.virtualRowKey"
             type="button"
             class="mobile-course-card"
-            @click="openCourseDetails(course)"
+            @pointerdown="handleCoursePointerDown"
+            @pointermove="handleCoursePointerMove"
+            @pointerup="handleCoursePointerUp"
+            @pointercancel="handleCoursePointerCancel"
+            @click="handleCourseCardClick(course, $event)"
           >
             <span class="mobile-course-card__title">{{ course.kcmc || '未命名课程' }}</span>
             <span class="mobile-course-card__meta">{{ course.display.teacherName || '教师信息暂无' }} · {{ course.sksj || '时间暂无' }}</span>
@@ -190,9 +194,45 @@ const emit = defineEmits(['file-selected', 'refresh']);
 const fileInput = ref(null);
 const selectedCourse = shallowRef(null);
 const detailsVisible = ref(false);
+const coursePointerState = ref(null);
+const suppressNextCourseClick = ref(false);
 const openCourseDetails = (course) => {
   selectedCourse.value = course;
   detailsVisible.value = true;
+};
+const handleCoursePointerDown = (event) => {
+  suppressNextCourseClick.value = false;
+  coursePointerState.value = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+  };
+};
+const handleCoursePointerMove = (event) => {
+  const state = coursePointerState.value;
+  if (!state || state.pointerId !== event.pointerId || state.moved) return;
+  state.moved = Math.hypot(event.clientX - state.startX, event.clientY - state.startY) > 8;
+};
+const handleCoursePointerUp = (event) => {
+  if (coursePointerState.value?.pointerId === event.pointerId) {
+    suppressNextCourseClick.value = coursePointerState.value.moved;
+    coursePointerState.value = null;
+  }
+};
+const handleCoursePointerCancel = (event) => {
+  if (coursePointerState.value?.pointerId === event.pointerId) {
+    suppressNextCourseClick.value = true;
+    coursePointerState.value = null;
+  }
+};
+const handleCourseCardClick = (course, event) => {
+  if (suppressNextCourseClick.value) {
+    event.preventDefault();
+    suppressNextCourseClick.value = false;
+    return;
+  }
+  openCourseDetails(course);
 };
 watch(() => props.courses, () => {
   detailsVisible.value = false;
@@ -588,14 +628,9 @@ const handleFileSelected = (event) => {
 
   .mobile-course-list {
     display: flex;
-    max-height: 62vh;
     min-height: 120px;
     flex-direction: column;
     gap: 10px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
   }
 
   .mobile-course-card {
@@ -613,7 +648,6 @@ const handleFileSelected = (event) => {
     text-align: left;
     box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
     cursor: pointer;
-    touch-action: manipulation;
   }
 
   .mobile-course-card:active { background: #eff6ff; }

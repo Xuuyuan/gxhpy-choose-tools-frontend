@@ -73,18 +73,31 @@
     />
 
     <div class="main-course-table" v-loading="loading" element-loading-text="正在加载课程数据..." :aria-busy="loading">
-      <div class="mobile-course-list" aria-label="课程总览">
+      <div
+        v-if="isMobile"
+        ref="mobileListRef"
+        class="mobile-course-list"
+        :class="{ 'mobile-course-list--empty': sortedFilteredCourses.length === 0 }"
+        :style="{
+          '--mobile-course-card-height': `${MOBILE_COURSE_CARD_HEIGHT}px`,
+          '--mobile-course-card-gap': `${MOBILE_COURSE_CARD_GAP}px`,
+        }"
+        aria-label="课程总览"
+        @scroll.passive="handleMobileListScroll"
+      >
         <template v-if="sortedFilteredCourses.length">
+          <div
+            v-if="mobileVirtualWindow.topSpacerHeight > 0"
+            class="mobile-course-list__spacer"
+            :style="{ height: `${mobileVirtualWindow.topSpacerHeight}px` }"
+            aria-hidden="true"
+          ></div>
           <button
-            v-for="course in sortedFilteredCourses"
+            v-for="course in visibleMobileCourses"
             :key="course.virtualRowKey"
             type="button"
             class="mobile-course-card"
-            @pointerdown="handleCoursePointerDown"
-            @pointermove="handleCoursePointerMove"
-            @pointerup="handleCoursePointerUp"
-            @pointercancel="handleCoursePointerCancel"
-            @click="handleCourseCardClick(course, $event)"
+            @click="openCourseDetails(course)"
           >
             <span class="mobile-course-card__title">{{ course.kcmc || '未命名课程' }}</span>
             <span class="mobile-course-card__meta">{{ course.display.teacherName || '教师信息暂无' }} · {{ course.sksj || '时间暂无' }}</span>
@@ -94,6 +107,12 @@
               <span>报录比 {{ course.display.ratio }}</span>
             </span>
           </button>
+          <div
+            v-if="mobileVirtualWindow.bottomSpacerHeight > 0"
+            class="mobile-course-list__spacer"
+            :style="{ height: `${mobileVirtualWindow.bottomSpacerHeight}px` }"
+            aria-hidden="true"
+          ></div>
         </template>
         <el-empty v-else :image-size="72" class="course-table-empty">
           <template #description>
@@ -102,44 +121,40 @@
           </template>
         </el-empty>
       </div>
-      <div class="desktop-course-table">
-      <el-auto-resizer>
-        <template #default="{ height, width }">
-          <el-table-v2
-            :columns="getCourseTableColumns(width)"
-            :data="sortedFilteredCourses"
-            :width="width"
-            :height="height"
-            :row-height="50"
-            :header-height="50"
-            :sort-by="courseSort"
-            :row-class="courseTableRowClass"
-            row-key="virtualRowKey"
-            fixed
-            scrollbar-always-on
-            aria-label="课程总览"
-            :aria-rowcount="sortedFilteredCourses.length + 1"
-            @column-sort="handleCourseSort"
-          >
-            <template #empty>
-              <el-empty :image-size="96" class="course-table-empty">
-                <template #description>
-                  <p class="course-table-empty-title">
-                    {{ courses.length === 0
-                      ? '暂未获取到课程列表'
-                      : '没有符合筛选条件的课程' }}
-                  </p>
-                  <p class="course-table-empty-hint">
-                    {{ courses.length === 0
-                      ? '请点击右上角刷新，或上传本地 JSON 文件'
-                      : '请尝试调整报录比、容量、校区、地点或课程名称条件' }}
-                  </p>
-                </template>
-              </el-empty>
-            </template>
-          </el-table-v2>
-        </template>
-      </el-auto-resizer>
+      <div v-else ref="desktopTableRef" class="desktop-course-table">
+        <el-table-v2
+          :columns="getCourseTableColumns(desktopTableWidth)"
+          :data="sortedFilteredCourses"
+          :width="desktopTableWidth"
+          :height="desktopTableHeight"
+          :row-height="50"
+          :header-height="50"
+          :sort-by="courseSort"
+          :row-class="courseTableRowClass"
+          row-key="virtualRowKey"
+          fixed
+          scrollbar-always-on
+          aria-label="课程总览"
+          :aria-rowcount="sortedFilteredCourses.length + 1"
+          @column-sort="handleCourseSort"
+        >
+          <template #empty>
+            <el-empty :image-size="96" class="course-table-empty">
+              <template #description>
+                <p class="course-table-empty-title">
+                  {{ courses.length === 0
+                    ? '暂未获取到课程列表'
+                    : '没有符合筛选条件的课程' }}
+                </p>
+                <p class="course-table-empty-hint">
+                  {{ courses.length === 0
+                    ? '请点击右上角刷新，或上传本地 JSON 文件'
+                    : '请尝试调整报录比、容量、校区、地点或课程名称条件' }}
+                </p>
+              </template>
+            </el-empty>
+          </template>
+        </el-table-v2>
       </div>
     </div>
     <el-dialog v-model="detailsVisible" title="课程详情" class="course-detail-dialog" width="min(560px, calc(100vw - 32px))" destroy-on-close>
@@ -157,10 +172,15 @@
 </template>
 
 <script setup>
-import { computed, h, ref, shallowRef, watch } from 'vue';
+import { computed, h, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import { ElIcon, TableV2SortOrder } from 'element-plus';
 import 'element-plus/es/components/icon/style/css';
 import { Download, Hide, Refresh, Upload, View } from '@element-plus/icons-vue';
+import {
+  computeVirtualWindow,
+  MOBILE_COURSE_CARD_GAP,
+  MOBILE_COURSE_CARD_HEIGHT,
+} from '../courseListVirtualization.js';
 
 const props = defineProps({
   courses: {
@@ -194,45 +214,9 @@ const emit = defineEmits(['file-selected', 'refresh']);
 const fileInput = ref(null);
 const selectedCourse = shallowRef(null);
 const detailsVisible = ref(false);
-const coursePointerState = ref(null);
-const suppressNextCourseClick = ref(false);
 const openCourseDetails = (course) => {
   selectedCourse.value = course;
   detailsVisible.value = true;
-};
-const handleCoursePointerDown = (event) => {
-  suppressNextCourseClick.value = false;
-  coursePointerState.value = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    moved: false,
-  };
-};
-const handleCoursePointerMove = (event) => {
-  const state = coursePointerState.value;
-  if (!state || state.pointerId !== event.pointerId || state.moved) return;
-  state.moved = Math.hypot(event.clientX - state.startX, event.clientY - state.startY) > 8;
-};
-const handleCoursePointerUp = (event) => {
-  if (coursePointerState.value?.pointerId === event.pointerId) {
-    suppressNextCourseClick.value = coursePointerState.value.moved;
-    coursePointerState.value = null;
-  }
-};
-const handleCoursePointerCancel = (event) => {
-  if (coursePointerState.value?.pointerId === event.pointerId) {
-    suppressNextCourseClick.value = true;
-    coursePointerState.value = null;
-  }
-};
-const handleCourseCardClick = (course, event) => {
-  if (suppressNextCourseClick.value) {
-    event.preventDefault();
-    suppressNextCourseClick.value = false;
-    return;
-  }
-  openCourseDetails(course);
 };
 watch(() => props.courses, () => {
   detailsVisible.value = false;
@@ -409,6 +393,83 @@ const handleCourseSort = ({ key, order }) => {
   courseSort.value = { key, order };
 };
 
+// --- 移动端课程列表 ---
+// 移动端与桌面端共用同一套筛选与排序结果，但移动端渲染为自带滚动的定高列表：
+// 纵向拖动完全交给浏览器原生滚动（列表 touch-action: pan-y，卡片不拦截触摸事件，
+// 也不手写 pointer 手势判定），组件只按滚动位置渲染可视区间，避免数百条课程
+// 同时挂在 DOM 上导致滑动卡顿。
+
+const mobileQuery = window.matchMedia('(max-width: 767px)');
+const isMobile = ref(mobileQuery.matches);
+const mobileListRef = ref(null);
+const mobileListScrollTop = ref(0);
+const mobileListViewportHeight = ref(0);
+const desktopTableRef = ref(null);
+const desktopTableWidth = ref(0);
+const desktopTableHeight = ref(0);
+
+const handleMobileQueryChange = (event) => {
+  isMobile.value = event.matches;
+};
+
+// 元素挂载、卸载或尺寸变化时同步尺寸；元素不存在时回落到 0，由调用方决定含义。
+const observeElementSize = (targetRef, applySize) => {
+  const observer = new ResizeObserver(() => applySize(targetRef.value));
+  watch(targetRef, (element, previousElement) => {
+    if (previousElement) observer.unobserve(previousElement);
+    if (element) observer.observe(element);
+    applySize(element);
+  }, { flush: 'post' });
+  onUnmounted(() => observer.disconnect());
+};
+
+const syncMobileListScroll = () => {
+  const element = mobileListRef.value;
+  mobileListScrollTop.value = element ? element.scrollTop : 0;
+};
+
+// 浏览器已把 scroll 事件限制在每帧一次，Vue 也会合并渲染，无需再做节流；
+// 用 requestAnimationFrame 反而会在后台标签页不触发时卡住状态。
+const handleMobileListScroll = (event) => {
+  mobileListScrollTop.value = event.currentTarget.scrollTop;
+};
+
+observeElementSize(mobileListRef, (element) => {
+  mobileListViewportHeight.value = element ? element.clientHeight : 0;
+  syncMobileListScroll();
+});
+
+// el-auto-resizer 在当前依赖下测不出容器尺寸，会让桌面端虚拟表格塌陷成 0 高度，
+// 这里改为自行测量容器，并把宽高显式传给 el-table-v2。
+observeElementSize(desktopTableRef, (element) => {
+  desktopTableWidth.value = element ? element.clientWidth : 0;
+  desktopTableHeight.value = element ? element.clientHeight : 0;
+});
+
+const mobileVirtualWindow = computed(() => computeVirtualWindow({
+  scrollTop: mobileListScrollTop.value,
+  viewportHeight: mobileListViewportHeight.value,
+  itemCount: sortedFilteredCourses.value.length,
+}));
+
+const visibleMobileCourses = computed(() => {
+  const { startIndex, endIndex } = mobileVirtualWindow.value;
+  return sortedFilteredCourses.value.slice(startIndex, endIndex);
+});
+
+// 筛选或排序变化会改变内容长度，浏览器夹取 scrollTop 时不一定派发滚动事件。
+watch(sortedFilteredCourses, () => {
+  nextTick(syncMobileListScroll);
+});
+
+onMounted(() => {
+  mobileQuery.addEventListener('change', handleMobileQueryChange);
+});
+
+onUnmounted(() => {
+  mobileQuery.removeEventListener('change', handleMobileQueryChange);
+});
+
 const courseTableRowClass = ({ rowIndex }) => (
   rowIndex % 2 === 1 ? 'course-table-row--striped' : ''
 );
@@ -512,7 +573,86 @@ const handleFileSelected = (event) => {
   height: 580px;
 }
 
-.mobile-course-list { display: none; }
+/* el-table-v2 的尺寸由容器测量结果决定，容器必须有确定高度：
+   若容器高度取决于内容，就会和「按测量结果渲染表格」互相依赖而塌陷成 0 高度。 */
+.desktop-course-table {
+  height: 100%;
+}
+
+/* 移动端课程列表是自带滚动的定高容器，只渲染可视区间内的卡片。
+   卡片高度与间距由 JS 写入的 CSS 变量给出，与 src/courseListVirtualization.js
+   中的常量同源，占位块高度才能和真实滚动位置对齐。 */
+.mobile-course-list {
+  display: block;
+  height: clamp(340px, 68vh, 620px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.mobile-course-list--empty {
+  display: grid;
+  place-items: center;
+}
+
+.mobile-course-list__spacer {
+  width: 100%;
+  pointer-events: none;
+}
+
+.mobile-course-card {
+  display: flex;
+  width: 100%;
+  height: var(--mobile-course-card-height, 144px);
+  margin-bottom: var(--mobile-course-card-gap, 10px);
+  padding: 13px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 5px;
+  overflow: hidden;
+  box-sizing: border-box;
+  color: inherit;
+  background: #fff;
+  text-align: left;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+  cursor: pointer;
+}
+
+.mobile-course-card:active { background: #eff6ff; }
+
+.mobile-course-card__title {
+  display: -webkit-box;
+  width: 100%;
+  overflow: hidden;
+  color: #1d4ed8;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 22px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mobile-course-card__meta {
+  width: 100%;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-course-card__stats {
+  display: flex;
+  width: 100%;
+  margin-top: auto;
+  justify-content: space-between;
+  color: #334155;
+  font-size: 12px;
+  line-height: 18px;
+}
 
 .course-table-cell-text {
   display: block;
@@ -623,36 +763,5 @@ const handleFileSelected = (event) => {
     height: auto;
     min-height: 120px;
   }
-
-  .desktop-course-table { display: none; }
-
-  .mobile-course-list {
-    display: flex;
-    min-height: 120px;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .mobile-course-card {
-    display: flex;
-    width: 100%;
-    min-height: 112px;
-    padding: 13px 14px;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
-    color: inherit;
-    background: #fff;
-    text-align: left;
-    box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
-    cursor: pointer;
-  }
-
-  .mobile-course-card:active { background: #eff6ff; }
-  .mobile-course-card__title { color: #1d4ed8; font-size: 15px; font-weight: 650; }
-  .mobile-course-card__meta { width: 100%; overflow: hidden; color: #64748b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-  .mobile-course-card__stats { display: flex; width: 100%; margin-top: auto; justify-content: space-between; color: #334155; font-size: 12px; }
 }
 </style>

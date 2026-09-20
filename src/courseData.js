@@ -18,6 +18,8 @@ const dayMapReverse = {
   '星期日': 7,
 };
 
+const dayLabels = Object.keys(dayMapReverse);
+
 export const getTeacherDisplayName = (teacherInfo) => {
   if (teacherInfo === null || teacherInfo === undefined || teacherInfo === '') return '';
   const text = String(teacherInfo);
@@ -38,7 +40,8 @@ export const parseWeek = (courseTime) => {
 export const parseDay = (courseTime) => {
   if (typeof courseTime !== 'string') return null;
 
-  for (const [label, day] of Object.entries(dayMapReverse)) {
+  for (const label of dayLabels) {
+    const day = dayMapReverse[label];
     if (courseTime.includes(label)) return day;
   }
 
@@ -63,6 +66,7 @@ export const preprocessCourses = (courses) => courses
 
     const jxbrl = parseInt(course.jxbrl, 10);
     const yxrs = parseInt(course.yxrs, 10);
+    // 各字段独立解析：教务接口的周次可能在前也可能在后，且一条记录可能含多个时段。
     const week = parseWeek(course.sksj);
     const day = parseDay(course.sksj);
     const startPeriod = parseStartPeriod(course.sksj);

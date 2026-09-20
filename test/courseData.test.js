@@ -125,6 +125,44 @@ test('课程名称与地点会规范化为可筛选的字符串', () => {
   assert.equal(course.jxdd, '456');
 });
 
+test('周次在前后两种上课时间格式解析结果一致', () => {
+  const [leadingWeek, trailingWeek] = preprocessCourses([
+    createCourse({ sksj: '{11周}星期五第3-4节' }),
+    createCourse({ sksj: '星期五第3-4节{11周}' }),
+  ]);
+
+  assert.deepEqual(leadingWeek.parsed, trailingWeek.parsed);
+  assert.deepEqual(trailingWeek.parsed, {
+    week: 11,
+    day: 5,
+    startPeriod: 3,
+    endPeriod: 4,
+    ratio: 0.25,
+  });
+});
+
+test('多时段记录只取首个时段，星期与节次不会来自不同时段', () => {
+  const [concatenated, htmlSeparated] = preprocessCourses([
+    createCourse({ sksj: '星期三第1-2节{10周}星期四第3-4节{11周}' }),
+    createCourse({ sksj: '星期三第1-8节{10周}<br/>星期四第1-8节{10周}' }),
+  ]);
+
+  assert.deepEqual(concatenated.parsed, {
+    week: 10,
+    day: 3,
+    startPeriod: 1,
+    endPeriod: 2,
+    ratio: 0.25,
+  });
+  assert.deepEqual(htmlSeparated.parsed, {
+    week: 10,
+    day: 3,
+    startPeriod: 1,
+    endPeriod: 8,
+    ratio: 0.25,
+  });
+});
+
 test('排除条件支持中英文逗号、空格与去重', () => {
   assert.deepEqual(parseExclusionTerms(' 东区，室外, 东区,， '), ['东区', '室外']);
   assert.deepEqual(parseExclusionTerms(''), []);

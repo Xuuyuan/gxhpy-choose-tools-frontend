@@ -351,22 +351,31 @@ const generatePlans = () => {
   }
   
   const plans = [];
+  const coursesByWeekDay = new Map();
+  for (const course of baseCourses) {
+    const key = `${course.parsed.week}:${course.parsed.day}`;
+    const bucket = coursesByWeekDay.get(key);
+    if (bucket) bucket.push(course);
+    else coursesByWeekDay.set(key, [course]);
+  }
   const emptyTemplateNumbers = [];
   const underfilledTemplates = [];
   for (const [templateIndex, template] of planTemplates.value.entries()) {
     // 步骤 4.1: 根据模板筛选课程
-    const templateFiltered = baseCourses.filter(c => {
-      // 匹配周
-      if (c.parsed.week !== template.week) return false;
-      // 匹配天
-      if (!template.days.includes(c.parsed.day)) return false;
-      // 按模板排除与第1-2节重叠的早八课程
-      if (template.excludeEarlyPeriods && overlapsEarlyPeriods(c)) return false;
-      // 按模板排除与第9-12节重叠的晚课
-      if (template.excludeLatePeriods && overlapsLatePeriods(c)) return false;
-      
-      return matchesPeriodType(c, template.periodType);
-    });
+    // 候选集取自 (周次:星期) 索引，周次与星期已由索引键保证匹配。
+    const templateDays = new Set(template.days);
+    const templateFiltered = [];
+    for (const day of templateDays) {
+      for (const c of coursesByWeekDay.get(`${template.week}:${day}`) || []) {
+        // 按模板排除与第1-2节重叠的早八课程
+        if (template.excludeEarlyPeriods && overlapsEarlyPeriods(c)) continue;
+        // 按模板排除与第9-12节重叠的晚课
+        if (template.excludeLatePeriods && overlapsLatePeriods(c)) continue;
+        if (!matchesPeriodType(c, template.periodType)) continue;
+
+        templateFiltered.push(c);
+      }
+    }
 
     // 步骤 4.2: 精确搜索。先最大化课程门数，再最大化预计联合成功概率。
     const optimalPlan = findOptimalCoursePlan(templateFiltered, template.maxCourses);

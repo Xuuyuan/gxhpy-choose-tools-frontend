@@ -141,10 +141,21 @@ export const parseExclusionTerms = value => (
 // 忽略接口记录顺序和无关元数据，保留影响筛选、求解和结果展示的字段。
 export const areCourseListsEquivalent = (previous, next) => {
   if (previous.length !== next.length) return false;
-  const signatures = courses => courses.map(course => JSON.stringify([
+  const getSignature = course => JSON.stringify([
     course.jxb_id ?? null, course.kcmc, course.jsxx ?? '', course.sksj,
     course.jxdd, course.jxbrl, course.yxrs,
-  ])).sort();
-  const previousSignatures = signatures(previous);
-  return signatures(next).every((signature, index) => signature === previousSignatures[index]);
+  ]);
+  const signatureCounts = new Map();
+  for (const course of previous) {
+    const signature = getSignature(course);
+    signatureCounts.set(signature, (signatureCounts.get(signature) || 0) + 1);
+  }
+  for (const course of next) {
+    const signature = getSignature(course);
+    const remaining = signatureCounts.get(signature);
+    if (!remaining) return false;
+    if (remaining === 1) signatureCounts.delete(signature);
+    else signatureCounts.set(signature, remaining - 1);
+  }
+  return signatureCounts.size === 0;
 };

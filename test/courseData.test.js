@@ -37,7 +37,7 @@ test('预处理生成 UI 可直接使用的解析与展示字段', () => {
     selectedCapacity: '30/120',
     ratio: '0.25',
     day: '五',
-    period: '3-4',
+    period: '第 3-4 节',
   });
 });
 

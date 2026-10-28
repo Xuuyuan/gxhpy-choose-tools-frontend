@@ -15,7 +15,7 @@ test('配置保存后恢复，恢复默认值不会共享数组', () => {
   assert.equal(savePlannerPreferences(preferences, () => storage), '');
   assert.deepEqual(loadPlannerPreferences(() => storage).preferences, preferences);
   preferences.templates[0].days.push(2);
-  assert.deepEqual(createDefaultPreferences().templates[0].days, [1]);
+  assert.deepEqual(createDefaultPreferences().templates[0].days, [1, 2, 3]);
   assert.equal(savePlannerPreferences(createDefaultPreferences(), () => storage), '');
   assert.deepEqual(loadPlannerPreferences(() => storage).preferences, createDefaultPreferences());
 });
@@ -52,7 +52,7 @@ test('允许空模板和未完成选项草稿，但不保存无关字段', () =>
 
 test('新增模板继承最近有效周次，没有模板时使用默认周次', () => {
   assert.equal(createAdditionalTemplate([{ week: 12 }, { week: null }]).week, 12);
-  assert.equal(createAdditionalTemplate([]).week, 11);
+  assert.equal(createAdditionalTemplate([]).week, 10);
   const first = createAdditionalTemplate([]);
   first.days.push(7);
   assert.deepEqual(createAdditionalTemplate([]).days, [1, 2, 3, 4, 5]);

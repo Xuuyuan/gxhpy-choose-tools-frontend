@@ -527,8 +527,10 @@ const handleFileSelected = (event) => {
 }
 
 .course-toolbar-title strong {
+  flex: 0 0 auto;
   color: #0f172a;
   font-size: 16px;
+  white-space: nowrap;
 }
 
 .course-toolbar-title small {
@@ -539,12 +541,14 @@ const handleFileSelected = (event) => {
 }
 
 .course-count {
+  flex: 0 0 auto;
   padding: 3px 9px;
   border-radius: 999px;
   color: #1d4ed8;
   background: #eff6ff;
   font-size: 12px;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .course-toolbar-actions {
@@ -732,7 +736,7 @@ const handleFileSelected = (event) => {
   line-height: 1.6;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 900px) {
   .course-overview-card > .el-card__body {
     padding: 0 12px 12px;
   }
@@ -744,10 +748,26 @@ const handleFileSelected = (event) => {
 
   .course-toolbar-title {
     width: 100%;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .course-toolbar-title strong,
+  .course-count {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .course-toolbar-title small {
-    margin-left: auto;
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 18px;
   }
 
   .course-toolbar-actions {

@@ -104,7 +104,7 @@ export const preprocessCourses = (courses) => courses
         selectedCapacity: `${yxrs}/${jxbrl}`,
         ratio: (ratio || 0).toFixed(2),
         day: dayMap[day],
-        period: `${startPeriod}-${endPeriod}`,
+        period: `第 ${startPeriod}-${endPeriod} 节`,
       },
       parsed: {
         week,

@@ -48,7 +48,7 @@
                             <span class="filter-label-with-tooltip" tabindex="0">最高报录比 (已选/容量)</span>
                           </el-tooltip>
                         </template>
-                        <el-input-number v-model="filters.maxRatio" :disabled="filters.excludeFullCourses" :min="0" :max="20" :step="0.1" controls-position="right" style="width: 100%;" />
+                        <el-input-number v-model="filters.maxRatio" :disabled="filters.excludeFullCourses" :min="0" :max="50" :step="0.1" controls-position="right" style="width: 100%;" />
                       </el-form-item>
                     </el-col>
                   </el-row>

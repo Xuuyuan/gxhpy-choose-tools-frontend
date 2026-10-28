@@ -7,12 +7,13 @@ import {
   formatCourseRequestError,
 } from '../src/courseService.js';
 
-test('普通加载使用浏览器默认缓存并校验课程数组', async () => {
+test('课程列表请求追加时间参数并校验课程数组', async () => {
   let receivedUrl;
   let receivedOptions;
   const payload = { courses: [], update_time: '现在' };
   const result = await fetchCoursePayload({
     url: '/gxhpy_classes.json',
+    now: () => 12345,
     fetchImpl: async (url, options) => {
       receivedUrl = url;
       receivedOptions = options;
@@ -21,7 +22,7 @@ test('普通加载使用浏览器默认缓存并校验课程数组', async () =>
   });
 
   assert.equal(result, payload);
-  assert.equal(receivedUrl, '/gxhpy_classes.json');
+  assert.equal(receivedUrl, '/gxhpy_classes.json?t=12345');
   assert.equal(receivedOptions.cache, 'default');
   assert.ok(receivedOptions.signal instanceof AbortSignal);
 });

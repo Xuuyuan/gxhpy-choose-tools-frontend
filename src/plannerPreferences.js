@@ -3,7 +3,7 @@ const STORAGE_KEY = 'gxhpy.planner-preferences.v1';
 export const createDefaultPreferences = () => ({
   filters: {
     minRatio: 0.3,
-    maxRatio: 10,
+    maxRatio: 50,
     excludeFullCourses: false,
     minCapacity: 90,
     selectedCampuses: ['旗山校区'],
@@ -11,8 +11,8 @@ export const createDefaultPreferences = () => ({
     excludeCourseNames: '',
   },
   templates: [
-    { week: 11, periodType: 0, days: [1], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 3 },
-    { week: 11, periodType: 0, days: [5], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 3 },
+    { week: 10, periodType: 0, days: [1, 2, 3], excludeEarlyPeriods: true, excludeLatePeriods: false, maxCourses: 9 },
+    { week: 11, periodType: 1, days: [4, 5, 6, 7], excludeEarlyPeriods: false, excludeLatePeriods: false, maxCourses: 9 },
   ],
 });
 
@@ -25,7 +25,7 @@ const normalizePreferences = (value) => {
   const filters = value?.filters;
   const templates = value?.templates;
   if (!filters || !isDraftNumber(filters.minRatio, 0, 20)
-    || !isDraftNumber(filters.maxRatio, 0, 20)
+    || !isDraftNumber(filters.maxRatio, 0, 50)
     || !isDraftNumber(filters.minCapacity, 0, Number.MAX_SAFE_INTEGER)
     || !Array.isArray(filters.selectedCampuses)
     || filters.selectedCampuses.some(campus => !['旗山校区', '仓山校区'].includes(campus))

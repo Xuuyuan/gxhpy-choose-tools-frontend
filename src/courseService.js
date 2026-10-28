@@ -41,7 +41,7 @@ export const fetchCoursePayload = async ({
     didTimeout = true;
     controller.abort();
   }, timeoutMs);
-  const requestUrl = isManualRefresh ? addCacheBuster(url, now()) : url;
+  const requestUrl = addCacheBuster(url, now());
 
   try {
     const response = await fetchImpl(requestUrl, {

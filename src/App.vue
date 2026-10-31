@@ -281,7 +281,7 @@ watch(() => filters.excludeFullCourses, (excludeFullCourses) => {
   if (excludeFullCourses) filters.maxRatio = 0.9999;
 }, { immediate: true, flush: 'sync' });
 
-const cangshanPrefixes = ['文', '综', '田'];
+const cangshanPrefixes = ['文', '综', '田','多功能厅'];
 const excludedLocations = computed(() => parseExclusionTerms(filters.excludeOutdoorPrefix));
 const excludedNames = computed(() => parseExclusionTerms(filters.excludeCourseNames));
 const filteredCourses = computed(() => {
